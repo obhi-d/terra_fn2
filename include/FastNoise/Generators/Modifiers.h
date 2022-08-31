@@ -9,8 +9,14 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetScale( float value ) { mScale = value; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetScale( float value )
+        {
+            mScale = value;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -38,13 +44,22 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
 
         template<Dim D>
-        void SetOffset( float value ) { mOffset[(int)D] = value; }
+        void SetOffset( float value )
+        {
+            mOffset[(int)D] = value;
+        }
 
         template<Dim D>
-        void SetOffset( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mOffset[(int)D], gen ); }
+        void SetOffset( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mOffset[(int)D], gen );
+        }
 
     protected:
         GeneratorSource mSource;
@@ -75,20 +90,38 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
 
-        void SetYaw(   float value ) { mYawCos   = std::cos( value ); mYawSin   = std::sin( value ); CalculateRotation(); }
-        void SetPitch( float value ) { mPitchCos = std::cos( value ); mPitchSin = std::sin( value ); CalculateRotation(); }
-        void SetRoll(  float value ) { mRollCos  = std::cos( value ); mRollSin  = std::sin( value ); CalculateRotation(); }
+        void SetYaw( float value )
+        {
+            mYawCos = std::cos( value );
+            mYawSin = std::sin( value );
+            CalculateRotation();
+        }
+        void SetPitch( float value )
+        {
+            mPitchCos = std::cos( value );
+            mPitchSin = std::sin( value );
+            CalculateRotation();
+        }
+        void SetRoll( float value )
+        {
+            mRollCos = std::cos( value );
+            mRollSin = std::sin( value );
+            CalculateRotation();
+        }
 
     protected:
         GeneratorSource mSource;
-        float mYawCos   = 1.0f;
-        float mYawSin   = 0.0f;
+        float mYawCos = 1.0f;
+        float mYawSin = 0.0f;
         float mPitchCos = 1.0f;
         float mPitchSin = 0.0f;
-        float mRollCos  = 1.0f;
-        float mRollSin  = 0.0f;
+        float mRollCos = 1.0f;
+        float mRollSin = 0.0f;
 
         float mXa = 1.0f;
         float mXb = 0.0f;
@@ -128,7 +161,7 @@ namespace FastNoise
             this->AddGeneratorSource( "Source", &DomainRotate::SetSource );
             this->AddVariable( "Yaw", 0.0f, &DomainRotate::SetYaw );
             this->AddVariable( "Pitch", 0.0f, &DomainRotate::SetPitch );
-            this->AddVariable( "Roll", 0.0f, &DomainRotate::SetRoll ); 
+            this->AddVariable( "Roll", 0.0f, &DomainRotate::SetRoll );
         }
     };
 #endif
@@ -139,8 +172,14 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetOffset( int value ) { mOffset = value; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetOffset( int value )
+        {
+            mOffset = value;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -168,8 +207,17 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetRemap( float fromMin, float fromMax, float toMin, float toMax ) { mFromMin = fromMin; mFromMax = fromMax; mToMin = toMin; mToMax = toMax; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetRemap( float fromMin, float fromMax, float toMin, float toMax )
+        {
+            mFromMin = fromMin;
+            mFromMax = fromMax;
+            mToMin = toMin;
+            mToMax = toMax;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -194,28 +242,24 @@ namespace FastNoise
             this->AddGeneratorSource( "Source", &Remap::SetSource );
 
             this->AddVariable( "From Min", -1.0f,
-                []( Remap* p, float f )
-                {
-                    p->mFromMin = f;
-                } );
+                               []( Remap* p, float f ) {
+                                   p->mFromMin = f;
+                               } );
 
             this->AddVariable( "From Max", 1.0f,
-                []( Remap* p, float f )
-                {
-                    p->mFromMax = f;
-                } );
+                               []( Remap* p, float f ) {
+                                   p->mFromMax = f;
+                               } );
 
             this->AddVariable( "To Min", 0.0f,
-                []( Remap* p, float f )
-                {
-                    p->mToMin = f;
-                } );
+                               []( Remap* p, float f ) {
+                                   p->mToMin = f;
+                               } );
 
             this->AddVariable( "To Max", 1.0f,
-                []( Remap* p, float f )
-                {
-                    p->mToMax = f;
-                } );
+                               []( Remap* p, float f ) {
+                                   p->mToMax = f;
+                               } );
         }
     };
 #endif
@@ -226,8 +270,15 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetMinMax( float min, float max ) { mMin = min; mMax = max; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetMinMax( float min, float max )
+        {
+            mMin = min;
+            mMax = max;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -250,16 +301,64 @@ namespace FastNoise
             this->AddGeneratorSource( "Source", &ConvertRGBA8::SetSource );
 
             this->AddVariable( "Min", -1.0f,
-                []( ConvertRGBA8* p, float f )
-                {
-                    p->mMin = f;
-                } );
+                               []( ConvertRGBA8* p, float f ) {
+                                   p->mMin = f;
+                               } );
 
             this->AddVariable( "Max", 1.0f,
-                []( ConvertRGBA8* p, float f )
-                {
-                    p->mMax = f;
-                } );
+                               []( ConvertRGBA8* p, float f ) {
+                                   p->mMax = f;
+                               } );
+        }
+    };
+#endif
+
+
+    class ConvertRAW16 : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetMinMax( float min, float max )
+        {
+            mMin = min;
+            mMax = max;
+        }
+
+    protected:
+        GeneratorSource mSource;
+        float mMin = -1.0f;
+        float mMax = 1.0f;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<ConvertRAW16> : MetadataT<Generator>
+    {
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &ConvertRAW16::SetSource );
+
+            this->AddVariable( "Min", -1.0f,
+                               []( ConvertRAW16* p, float f ) {
+                                   p->mMin = f;
+                               } );
+
+            this->AddVariable( "Max", 1.0f,
+                               []( ConvertRAW16* p, float f ) {
+                                   p->mMax = f;
+                               } );
         }
     };
 #endif
@@ -270,9 +369,21 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetMultiplier( float multiplier ) { mMultiplier = multiplier; mMultiplierRecip = 1 / multiplier; }
-        void SetSmoothness( float smoothness ) { mSmoothness = smoothness; if( mSmoothness != 0.0f ) mSmoothnessRecip = 1 + 1 / smoothness; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetMultiplier( float multiplier )
+        {
+            mMultiplier = multiplier;
+            mMultiplierRecip = 1 / multiplier;
+        }
+        void SetSmoothness( float smoothness )
+        {
+            mSmoothness = smoothness;
+            if( mSmoothness != 0.0f )
+                mSmoothnessRecip = 1 + 1 / smoothness;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -304,10 +415,16 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
 
         template<Dim D>
-        void SetScale( float value ) { mScale[(int)D] = value; }
+        void SetScale( float value )
+        {
+            mScale[(int)D] = value;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -338,9 +455,18 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetNewDimensionPosition( float value ) { mNewDimensionPosition = value; }
-        void SetNewDimensionPosition( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mNewDimensionPosition, gen ); }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetNewDimensionPosition( float value )
+        {
+            mNewDimensionPosition = value;
+        }
+        void SetNewDimensionPosition( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mNewDimensionPosition, gen );
+        }
 
     protected:
         GeneratorSource mSource;
@@ -368,8 +494,14 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetRemoveDimension( Dim dimension ) { mRemoveDimension = dimension; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetRemoveDimension( Dim dimension )
+        {
+            mRemoveDimension = dimension;
+        }
 
     protected:
         GeneratorSource mSource;
@@ -397,7 +529,10 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
 
     protected:
         GeneratorSource mSource;
@@ -416,5 +551,5 @@ namespace FastNoise
         }
     };
 #endif
-    
-}
+
+} // namespace FastNoise

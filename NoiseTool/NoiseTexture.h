@@ -1,13 +1,16 @@
 #pragma once
-#include <vector>
-#include <memory>
-#include <thread>
+#include <array>
+#include <atomic>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
 
-#include <Magnum/Magnum.h>
 #include <Magnum/GL/GL.h>
 #include <Magnum/GL/Texture.h>
 #include <Magnum/ImageView.h>
+#include <Magnum/Magnum.h>
 #include <Magnum/Math/Vector4.h>
 
 #include "FastNoise/FastNoise.h"
@@ -27,7 +30,7 @@ namespace Magnum
             GenType_Count
         };
 
-        inline static const char* GenTypeStrings = 
+        inline static const char* GenTypeStrings =
             "2D\0"
             "2D Tiled\0"
             "3D Slice\0"
@@ -44,18 +47,21 @@ namespace Magnum
         {
             FastNoise::SmartNode<const FastNoise::Generator> generator;
             Vector2i size;
+            Vector2i numberOfPlanes = Vector2i( 1, 1 );
             Vector4 offset;
             float frequency;
             int32_t seed;
             uint64_t iteration;
-            GenType generationType;          
+            GenType generationType;
+            std::array<char, 256> path = {};
         };
 
         struct TextureData
         {
             TextureData() = default;
 
-            TextureData( uint64_t iter, Vector2i s, FastNoise::OutputMinMax mm, const std::vector<float>& v ) : minMax( mm ), size( s ), iteration( iter )
+            TextureData( uint64_t iter, Vector2i s, FastNoise::OutputMinMax mm, const std::vector<float>& v ) :
+                minMax( mm ), size( s ), iteration( iter )
             {
                 if( v.empty() )
                 {
@@ -82,13 +88,20 @@ namespace Magnum
             uint64_t iteration;
         };
 
+
+        template<typename Wrapper>
         static TextureData BuildTexture( const BuildData& buildData );
+        static void BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData, Magnum::Vector4 offset );
         static void GenerateLoopThread( GenerateQueue<BuildData>& generateQueue, CompleteQueue<TextureData>& completeQueue );
-        
+
         void DoExport();
+        void DoExportRAW();
+        void DoExportBMP();
         void SetupSettingsHandlers();
         void SetPreviewTexture( ImageView2D& imageView );
 
+        std::atomic_int exportProgress = 0;
+        std::string status;
         GL::Texture2D mNoiseTexture;
         uint64_t mCurrentIteration = 0;
 
@@ -101,4 +114,4 @@ namespace Magnum
         GenerateQueue<BuildData> mGenerateQueue;
         CompleteQueue<TextureData> mCompleteQueue;
     };
-}
+} // namespace Magnum

@@ -1,7 +1,7 @@
 #pragma once
 #include <cinttypes>
-#include <type_traits>
 #include <memory>
+#include <type_traits>
 
 #include "FastSIMD/FastSIMD.h"
 
@@ -13,8 +13,8 @@
 #endif
 #define FS_INLINE __forceinline
 #else
-#define FS_VECTORCALL 
-#define FS_INLINE __attribute__((always_inline)) inline
+#define FS_VECTORCALL
+#define FS_INLINE __attribute__( ( always_inline ) ) inline
 #endif
 
 #ifndef NDEBUG
@@ -147,7 +147,7 @@
 // Convert
 
 /// <summary>
-/// Convert int to float 
+/// Convert int to float
 /// </summary>
 /// <remarks>
 /// Rounding: truncate
@@ -582,18 +582,18 @@
 
 namespace FastSIMD
 {
-    //FMA
+    // FMA
 
     template<typename FS>
     FS_INLINE typename FS::float32v FMulAdd_f32( typename FS::float32v a, typename FS::float32v b, typename FS::float32v c )
     {
-        return (a * b) + c;
+        return ( a * b ) + c;
     }
 
     template<typename FS>
     FS_INLINE typename FS::float32v FNMulAdd_f32( typename FS::float32v a, typename FS::float32v b, typename FS::float32v c )
     {
-        return -(a * b) + c;
+        return -( a * b ) + c;
     }
 
     // Masked float
@@ -702,7 +702,7 @@ namespace FastSIMD
     // Bitwise
 
     template<typename FS, std::enable_if_t<std::is_same_v<typename FS::int32v, typename FS::mask32v>>* = nullptr>
-    FS_INLINE  typename FS::mask32v BitwiseAndNot_m32( typename FS::mask32v a, typename FS::mask32v b )
+    FS_INLINE typename FS::mask32v BitwiseAndNot_m32( typename FS::mask32v a, typename FS::mask32v b )
     {
         return FS::BitwiseAndNot_i32( a, b );
     }
@@ -710,7 +710,7 @@ namespace FastSIMD
     template<typename FS, std::enable_if_t<!std::is_same_v<typename FS::int32v, typename FS::mask32v>>* = nullptr>
     FS_INLINE typename FS::mask32v BitwiseAndNot_m32( typename FS::mask32v a, typename FS::mask32v b )
     {
-        return a & (~b);
+        return a & ( ~b );
     }
 
     // Trig
@@ -725,7 +725,7 @@ namespace FastSIMD
         value = FS_Abs_f32( value );
         value -= FS_Floor_f32( value * float32v( 0.1591549f ) ) * float32v( 6.283185f );
 
-        mask32v geHalfPi  = value >= float32v( 1.570796f );
+        mask32v geHalfPi = value >= float32v( 1.570796f );
         mask32v geHalfPi2 = value >= float32v( 3.141593f );
         mask32v geHalfPi3 = value >= float32v( 4.7123889f );
 
@@ -759,7 +759,7 @@ namespace FastSIMD
         float32v fx = x * float32v( 1.44269504088896341f );
         fx += float32v( 0.5f );
 
-        float32v flr = FS_Floor_f32( fx );  
+        float32v flr = FS_Floor_f32( fx );
         fx = FS_MaskedSub_f32( flr, float32v( 1 ), flr > fx );
 
         x -= fx * float32v( 0.693359375f );
@@ -777,7 +777,7 @@ namespace FastSIMD
         y *= x;
         y += float32v( 5.0000001201E-1f );
         y *= x * x;
-        y += x + float32v( 1 );        
+        y += x + float32v( 1 );
 
         /* build 2^n */
         int32v i = FS_Convertf32_i32( fx );
@@ -785,8 +785,8 @@ namespace FastSIMD
         i += int32v( 0x7f );
         i <<= 23;
         float32v pow2n = FS_Casti32_f32( i );
-        
-        return y * pow2n;        
+
+        return y * pow2n;
     }
 
     template<typename FS>
@@ -795,10 +795,10 @@ namespace FastSIMD
         typedef typename FS::int32v int32v;
         typedef typename FS::float32v float32v;
         typedef typename FS::mask32v mask32v;
-                
+
         mask32v validMask = x > float32v( 0 );
 
-        x = FS_Max_f32( x, FS_Casti32_f32( int32v( 0x00800000 ) ) );  /* cut off denormalized stuff */
+        x = FS_Max_f32( x, FS_Casti32_f32( int32v( 0x00800000 ) ) ); /* cut off denormalized stuff */
 
         // can be done with AVX2
         int32v i = FS_BitwiseShiftRightZX_i32( FS_Castf32_i32( x ), 23 );
@@ -853,4 +853,4 @@ namespace FastSIMD
     {
         return Exp_f32<FS>( pow * Log_f32<FS>( value ) );
     }
-}
+} // namespace FastSIMD
