@@ -1,7 +1,7 @@
 #pragma once
+#include <condition_variable>
 #include <mutex>
 #include <queue>
-#include <condition_variable>
 
 template<typename T>
 class GenerateQueue
@@ -16,7 +16,7 @@ public:
 
     bool ShouldKillThread()
     {
-        return mKillThreads;        
+        return mKillThreads;
     }
 
     void Clear()
@@ -59,10 +59,10 @@ public:
     }
 
 private:
-    std::queue<T> mQueue;
-    std::mutex mMutex;
+    std::queue<T>           mQueue;
+    std::mutex              mMutex;
     std::condition_variable mCond;
-    bool mKillThreads = false;
+    bool                    mKillThreads = false;
 };
 
 template<typename T>
@@ -94,7 +94,7 @@ public:
         {
             return false;
         }
-        out = mQueue.front();
+        out = std::move( mQueue.front() );
         mQueue.pop();
         return true;
     }
@@ -111,7 +111,7 @@ public:
     }
 
 private:
-    uint32_t mVersion = 0;
+    uint32_t      mVersion = 0;
     std::queue<T> mQueue;
-    std::mutex mMutex;
+    std::mutex    mMutex;
 };

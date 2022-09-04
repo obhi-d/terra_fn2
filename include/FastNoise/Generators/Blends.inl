@@ -7,11 +7,17 @@ class FS_T<FastNoise::Add, FS> : public virtual FastNoise::Add, public FS_T<Fast
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return this->GetSourceValue( mLHS, seed, pos... ) + this->GetSourceValue( mRHS, seed, pos... );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = o.output[b] + o2.output[b];
     }
 };
 
@@ -20,11 +26,17 @@ class FS_T<FastNoise::Subtract, FS> : public virtual FastNoise::Subtract, public
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return this->GetSourceValue( mLHS, seed, pos... ) - this->GetSourceValue( mRHS, seed, pos... );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = o.output[b] - o2.output[b];
     }
 };
 
@@ -33,11 +45,17 @@ class FS_T<FastNoise::Multiply, FS> : public virtual FastNoise::Multiply, public
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return this->GetSourceValue( mLHS, seed, pos... ) * this->GetSourceValue( mRHS, seed, pos... );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = o.output[b] * o2.output[b];
     }
 };
 
@@ -46,11 +64,17 @@ class FS_T<FastNoise::Divide, FS> : public virtual FastNoise::Divide, public FS_
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return this->GetSourceValue( mLHS, seed, pos... ) / this->GetSourceValue( mRHS, seed, pos... );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = o.output[b] / o2.output[b];
     }
 };
 
@@ -59,11 +83,17 @@ class FS_T<FastNoise::PowFloat, FS> : public virtual FastNoise::PowFloat, public
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return FS_Pow_f32( this->GetSourceValue( mValue, seed, pos... ), this->GetSourceValue( mPow, seed, pos... ) );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mValue, u, i, o );
+        this->GetSourceValue( mPow, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = FS_Pow_f32( o.output[b], o2.output[b] );
     }
 };
 
@@ -72,19 +102,18 @@ class FS_T<FastNoise::PowInt, FS> : public virtual FastNoise::PowInt, public FS_
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        float32v value = this->GetSourceValue( mValue, seed, pos... );
-        float32v pow = value * value;
-
-        for( int i = 2; i < mPow; i++ )
+        constexpr auto N = Input::N;
+        this->GetSourceValue( mValue, u, i, o );
+        for( uint b = 0; b < BlockSize; ++b )
         {
-            pow *= value;
+            auto value = o.output[b];
+            for( int i = 1; i < mPow; ++i )
+                o.output[b] *= value;
         }
-
-        return pow;
     }
 };
 
@@ -93,11 +122,17 @@ class FS_T<FastNoise::Min, FS> : public virtual FastNoise::Min, public FS_T<Fast
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return FS_Min_f32( this->GetSourceValue( mLHS, seed, pos... ), this->GetSourceValue( mRHS, seed, pos... ) );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = FS_Min_f32( o.output[b], o2.output[b] );
     }
 };
 
@@ -106,11 +141,17 @@ class FS_T<FastNoise::Max, FS> : public virtual FastNoise::Max, public FS_T<Fast
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return FS_Max_f32( this->GetSourceValue( mLHS, seed, pos... ), this->GetSourceValue( mRHS, seed, pos... ) );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b;
+        Output                      o2( o2b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        for( uint b = 0; b < BlockSize; ++b )
+            o.output[b] = FS_Max_f32( o.output[b], o2.output[b] );
     }
 };
 
@@ -119,19 +160,26 @@ class FS_T<FastNoise::MinSmooth, FS> : public virtual FastNoise::MinSmooth, publ
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        float32v a = this->GetSourceValue( mLHS, seed, pos... );
-        float32v b = this->GetSourceValue( mRHS, seed, pos... );
-        float32v smoothness = FS_Max_f32( float32v( 1.175494351e-38f ), FS_Abs_f32( this->GetSourceValue( mSmoothness, seed, pos... ) ) );
-
-        float32v h = FS_Max_f32( smoothness - FS_Abs_f32( a - b ), float32v( 0.0f ) );
-
-        h *= FS_Reciprocal_f32( smoothness );
-
-        return FS_FNMulAdd_f32( float32v( 1.0f / 6.0f ), h * h * h * smoothness, FS_Min_f32( a, b ) );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b, o3b;
+        Output                      o2( o2b );
+        Output                      o3( o3b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        this->GetSourceValue( mSmoothness, u, i, o3 );
+        for( uint bs = 0; bs < BlockSize; ++bs )
+        {
+            float32v a          = o.output[bs];
+            float32v b          = o2.output[bs];
+            float32v smoothness = FS_Max_f32( float32v( 1.175494351e-38f ), FS_Abs_f32( o3.output[bs] ) );
+            float32v h          = FS_Max_f32( smoothness - FS_Abs_f32( a - b ), float32v( 0.0f ) );
+            h *= FS_Reciprocal_f32( smoothness );
+            o.output[bs] = FS_FNMulAdd_f32( float32v( 1.0f / 6.0f ), h * h * h * smoothness, FS_Min_f32( a, b ) );
+        }
     }
 };
 
@@ -140,19 +188,26 @@ class FS_T<FastNoise::MaxSmooth, FS> : public virtual FastNoise::MaxSmooth, publ
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        float32v a = -this->GetSourceValue( mLHS, seed, pos... );
-        float32v b = -this->GetSourceValue( mRHS, seed, pos... );
-        float32v smoothness = FS_Max_f32( float32v( 1.175494351e-38f ), FS_Abs_f32( this->GetSourceValue( mSmoothness, seed, pos... ) ) );
-
-        float32v h = FS_Max_f32( smoothness - FS_Abs_f32( a - b ), float32v( 0.0f ) );
-
-        h *= FS_Reciprocal_f32( smoothness );
-
-        return -FS_FNMulAdd_f32( float32v( 1.0f / 6.0f ), h * h * h * smoothness, FS_Min_f32( a, b ) );
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b, o3b;
+        Output                      o2( o2b );
+        Output                      o3( o3b );
+        this->GetSourceValue( mLHS, u, i, o );
+        this->GetSourceValue( mRHS, u, i, o2 );
+        this->GetSourceValue( mSmoothness, u, i, o3 );
+        for( uint bs = 0; bs < BlockSize; ++bs )
+        {
+            float32v a          = o.output[bs];
+            float32v b          = o2.output[bs];
+            float32v smoothness = FS_Max_f32( float32v( 1.175494351e-38f ), FS_Abs_f32( o3.output[bs] ) );
+            float32v h          = FS_Max_f32( smoothness - FS_Abs_f32( a - b ), float32v( 0.0f ) );
+            h *= FS_Reciprocal_f32( smoothness );
+            o.output[bs] = -FS_FNMulAdd_f32( float32v( 1.0f / 6.0f ), h * h * h * smoothness, FS_Min_f32( a, b ) );
+        }
     }
 };
 
@@ -161,13 +216,21 @@ class FS_T<FastNoise::Fade, FS> : public virtual FastNoise::Fade, public FS_T<Fa
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
-    
-    template<typename... P> 
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
-    {
-        float32v fade = FS_Abs_f32( this->GetSourceValue( mFade, seed, pos... ) );
 
-        return FS_FMulAdd_f32( this->GetSourceValue( mA, seed, pos... ), float32v( 1 ) - fade, this->GetSourceValue( mB, seed, pos... ) * fade );
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto              N = Input::N;
+        typename Output::LocalBlock o2b, o3b;
+        Output                      o2( o2b );
+        Output                      o3( o3b );
+        this->GetSourceValue( mFade, u, i, o );
+        this->GetSourceValue( mA, u, i, o2 );
+        this->GetSourceValue( mB, u, i, o3 );
+        for( uint b = 0; b < BlockSize; ++b )
+        {
+            float32v fade = FS_Abs_f32( o.output[b] );
+            o.output[b]   = FS_FMulAdd_f32( o2.output[b], float32v( 1 ) - fade, o3.output[b] * fade );
+        }
     }
 };
-

@@ -1,6 +1,7 @@
 #ifndef FASTNOISE_C_H
 #define FASTNOISE_C_H
 
+#if 0
 #include "FastNoise_Export.h"
 
 #ifdef __cplusplus
@@ -80,4 +81,5 @@ FASTNOISE_API bool fnSetHybridFloat( void* node, int hybridIndex, float value );
 }
 #endif
 
+#endif
 #endif

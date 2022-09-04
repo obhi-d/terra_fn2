@@ -1,7 +1,7 @@
-#include <FastNoise/FastNoise_C.h>
 #include <FastNoise/FastNoise.h>
+#include <FastNoise/FastNoise_C.h>
 #include <FastNoise/Metadata.h>
-
+#if 0
 FastNoise::Generator* ToGen( void* p )
 {
     return static_cast<FastNoise::SmartNode<>*>( p )->get();
@@ -315,3 +315,4 @@ bool fnSetHybridFloat( void* node, int hybridIndex, float value )
     }
     return false;
 }
+#endif

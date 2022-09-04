@@ -1,14 +1,31 @@
 #include "FastSIMD/InlInclude.h"
 
-#include "Value.h"
 #include "Utils.inl"
+#include "Value.h"
 
 template<typename FS>
 class FS_T<FastNoise::Value, FS> : public virtual FastNoise::Value, public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
 
-    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y ) const final
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto N = Input::N;
+        GenBlockT( u.seed, i, o, std::make_index_sequence<N> {} );
+    }
+
+    template<typename Input, size_t... I>
+    FS_INLINE void GenBlockT( int32v seed, Input& i, Output& o, std::index_sequence<I...> ) const
+    {
+        for( uint b = 0; b < BlockSize; ++b )
+        {
+            o.output[b] = Gen( seed, i.v[b][I]... );
+        }
+    }
+
+    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y ) const
     {
         float32v xs = FS_Floor_f32( x );
         float32v ys = FS_Floor_f32( y );
@@ -26,7 +43,7 @@ class FS_T<FastNoise::Value, FS> : public virtual FastNoise::Value, public FS_T<
             FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1 ), FnUtils::GetValueCoord( seed, x1, y1 ), xs ), ys );
     }
 
-    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z ) const final
+    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z ) const
     {
         float32v xs = FS_Floor_f32( x );
         float32v ys = FS_Floor_f32( y );
@@ -44,14 +61,15 @@ class FS_T<FastNoise::Value, FS> : public virtual FastNoise::Value, public FS_T<
         zs = FnUtils::InterpHermite( z - zs );
 
         return FnUtils::Lerp( FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z0 ), FnUtils::GetValueCoord( seed, x1, y0, z0 ), xs ),
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z0 ), FnUtils::GetValueCoord( seed, x1, y1, z0 ), xs ), ys ),
-            FnUtils::Lerp(                                                                                
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z1 ), FnUtils::GetValueCoord( seed, x1, y0, z1 ), xs ),    
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z1 ), FnUtils::GetValueCoord( seed, x1, y1, z1 ), xs ), ys ), zs );
+                                  FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z0 ), FnUtils::GetValueCoord( seed, x1, y0, z0 ), xs ),
+                                  FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z0 ), FnUtils::GetValueCoord( seed, x1, y1, z0 ), xs ), ys ),
+                              FnUtils::Lerp(
+                                  FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z1 ), FnUtils::GetValueCoord( seed, x1, y0, z1 ), xs ),
+                                  FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z1 ), FnUtils::GetValueCoord( seed, x1, y1, z1 ), xs ), ys ),
+                              zs );
     }
 
-    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z, float32v w ) const final
+    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z, float32v w ) const
     {
         float32v xs = FS_Floor_f32( x );
         float32v ys = FS_Floor_f32( y );
@@ -73,16 +91,19 @@ class FS_T<FastNoise::Value, FS> : public virtual FastNoise::Value, public FS_T<
         ws = FnUtils::InterpHermite( w - ws );
 
         return FnUtils::Lerp( FnUtils::Lerp( FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z0, w0 ), FnUtils::GetValueCoord( seed, x1, y0, z0, w0 ), xs ),
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z0, w0 ), FnUtils::GetValueCoord( seed, x1, y1, z0, w0 ), xs ), ys ),
-            FnUtils::Lerp( 
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z1, w0 ), FnUtils::GetValueCoord( seed, x1, y0, z1, w0 ), xs ),    
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z1, w0 ), FnUtils::GetValueCoord( seed, x1, y1, z1, w0 ), xs ), ys ), zs ),
-            FnUtils::Lerp( FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z0, w1 ), FnUtils::GetValueCoord( seed, x1, y0, z0, w1 ), xs ),
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z0, w1 ), FnUtils::GetValueCoord( seed, x1, y1, z0, w1 ), xs ), ys ),
-            FnUtils::Lerp( 
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z1, w1 ), FnUtils::GetValueCoord( seed, x1, y0, z1, w1 ), xs ),    
-            FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z1, w1 ), FnUtils::GetValueCoord( seed, x1, y1, z1, w1 ), xs ), ys ), zs ), ws );
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z0, w0 ), FnUtils::GetValueCoord( seed, x1, y0, z0, w0 ), xs ),
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z0, w0 ), FnUtils::GetValueCoord( seed, x1, y1, z0, w0 ), xs ), ys ),
+                                             FnUtils::Lerp(
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z1, w0 ), FnUtils::GetValueCoord( seed, x1, y0, z1, w0 ), xs ),
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z1, w0 ), FnUtils::GetValueCoord( seed, x1, y1, z1, w0 ), xs ), ys ),
+                                             zs ),
+                              FnUtils::Lerp( FnUtils::Lerp(
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z0, w1 ), FnUtils::GetValueCoord( seed, x1, y0, z0, w1 ), xs ),
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z0, w1 ), FnUtils::GetValueCoord( seed, x1, y1, z0, w1 ), xs ), ys ),
+                                             FnUtils::Lerp(
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y0, z1, w1 ), FnUtils::GetValueCoord( seed, x1, y0, z1, w1 ), xs ),
+                                                 FnUtils::Lerp( FnUtils::GetValueCoord( seed, x0, y1, z1, w1 ), FnUtils::GetValueCoord( seed, x1, y1, z1, w1 ), xs ), ys ),
+                                             zs ),
+                              ws );
     }
 };

@@ -20,7 +20,7 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        float mScale = 1.0f;
+        float           mScale = 1.0f;
     };
 
 #ifdef FASTNOISE_METADATA
@@ -62,7 +62,7 @@ namespace FastNoise
         }
 
     protected:
-        GeneratorSource mSource;
+        GeneratorSource                    mSource;
         PerDimensionVariable<HybridSource> mOffset = 0.0f;
 
         template<typename T>
@@ -116,12 +116,12 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        float mYawCos = 1.0f;
-        float mYawSin = 0.0f;
-        float mPitchCos = 1.0f;
-        float mPitchSin = 0.0f;
-        float mRollCos = 1.0f;
-        float mRollSin = 0.0f;
+        float           mYawCos   = 1.0f;
+        float           mYawSin   = 0.0f;
+        float           mPitchCos = 1.0f;
+        float           mPitchSin = 0.0f;
+        float           mRollCos  = 1.0f;
+        float           mRollSin  = 0.0f;
 
         float mXa = 1.0f;
         float mXb = 0.0f;
@@ -183,7 +183,7 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        int mOffset = 1;
+        int             mOffset = 1;
     };
 
 #ifdef FASTNOISE_METADATA
@@ -215,16 +215,16 @@ namespace FastNoise
         {
             mFromMin = fromMin;
             mFromMax = fromMax;
-            mToMin = toMin;
-            mToMax = toMax;
+            mToMin   = toMin;
+            mToMax   = toMax;
         }
 
     protected:
         GeneratorSource mSource;
-        float mFromMin = -1.0f;
-        float mFromMax = 1.0f;
-        float mToMin = 0.0f;
-        float mToMax = 1.0f;
+        float           mFromMin = -1.0f;
+        float           mFromMax = 1.0f;
+        float           mToMin   = 0.0f;
+        float           mToMax   = 1.0f;
 
         template<typename T>
         friend struct MetadataT;
@@ -282,8 +282,8 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        float mMin = -1.0f;
-        float mMax = 1.0f;
+        float           mMin = -1.0f;
+        float           mMax = 1.0f;
 
         template<typename T>
         friend struct MetadataT;
@@ -324,16 +324,9 @@ namespace FastNoise
         {
             this->SetSourceMemberVariable( mSource, gen );
         }
-        void SetMinMax( float min, float max )
-        {
-            mMin = min;
-            mMax = max;
-        }
 
     protected:
         GeneratorSource mSource;
-        float mMin = -1.0f;
-        float mMax = 1.0f;
 
         template<typename T>
         friend struct MetadataT;
@@ -349,16 +342,6 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &ConvertRAW16::SetSource );
-
-            this->AddVariable( "Min", -1.0f,
-                               []( ConvertRAW16* p, float f ) {
-                                   p->mMin = f;
-                               } );
-
-            this->AddVariable( "Max", 1.0f,
-                               []( ConvertRAW16* p, float f ) {
-                                   p->mMax = f;
-                               } );
         }
     };
 #endif
@@ -375,7 +358,7 @@ namespace FastNoise
         }
         void SetMultiplier( float multiplier )
         {
-            mMultiplier = multiplier;
+            mMultiplier      = multiplier;
             mMultiplierRecip = 1 / multiplier;
         }
         void SetSmoothness( float smoothness )
@@ -387,10 +370,10 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        float mMultiplier = 1.0f;
-        float mMultiplierRecip = 1.0f;
-        float mSmoothness = 0.0f;
-        float mSmoothnessRecip = 0.0f;
+        float           mMultiplier      = 1.0f;
+        float           mMultiplierRecip = 1.0f;
+        float           mSmoothness      = 0.0f;
+        float           mSmoothnessRecip = 0.0f;
     };
 
 #ifdef FASTNOISE_METADATA
@@ -427,7 +410,7 @@ namespace FastNoise
         }
 
     protected:
-        GeneratorSource mSource;
+        GeneratorSource             mSource;
         PerDimensionVariable<float> mScale = 1.0f;
 
         template<typename T>
@@ -470,7 +453,7 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        HybridSource mNewDimensionPosition = 0.0f;
+        HybridSource    mNewDimensionPosition = 0.0f;
     };
 
 #ifdef FASTNOISE_METADATA
@@ -505,7 +488,7 @@ namespace FastNoise
 
     protected:
         GeneratorSource mSource;
-        Dim mRemoveDimension = Dim::Y;
+        Dim             mRemoveDimension = Dim::Y;
     };
 
 #ifdef FASTNOISE_METADATA
@@ -552,4 +535,46 @@ namespace FastNoise
     };
 #endif
 
+    class EdgeFalloff : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+
+        void SetEdgeLevel( float iLevel )
+        {
+            mEdgeLevel = iLevel;
+        }
+
+    protected:
+        GeneratorSource             mSource;
+        PerDimensionVariable<float> mFaloff    = {};
+        float                       mEdgeLevel = 0.0f;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<EdgeFalloff> : MetadataT<Generator>
+    {
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &EdgeFalloff::SetSource );
+            this->AddPerDimensionVariable( "Falloff", 1.0f, []( EdgeFalloff* p ) { return std::ref( p->mFaloff ); } );
+            this->AddVariable( "EdgeLevel", 0.0f, &EdgeFalloff::SetEdgeLevel );
+        }
+
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+    };
+
+#endif
 } // namespace FastNoise

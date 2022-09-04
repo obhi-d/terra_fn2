@@ -7,8 +7,25 @@ template<typename FS>
 class FS_T<FastNoise::Perlin, FS> : public virtual FastNoise::Perlin, public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
 
-    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y ) const final
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto N = Input::N;
+        GenBlockT( u.seed, i, o, std::make_index_sequence<N> {} );
+    }
+
+    template<typename Input, size_t... I>
+    FS_INLINE void GenBlockT( int32v seed, Input& i, Output& o, std::index_sequence<I...> ) const
+    {
+        for( uint b = 0; b < BlockSize; ++b )
+        {
+            o.output[b] = Gen( seed, i.v[b][I]... );
+        }
+    }
+
+    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y ) const
     {
         float32v xs = FS_Floor_f32( x );
         float32v ys = FS_Floor_f32( y );
@@ -20,18 +37,16 @@ class FS_T<FastNoise::Perlin, FS> : public virtual FastNoise::Perlin, public FS_
 
         float32v xf0 = xs = x - xs;
         float32v yf0 = ys = y - ys;
-        float32v xf1 = xf0 - float32v( 1 );
-        float32v yf1 = yf0 - float32v( 1 );
+        float32v xf1      = xf0 - float32v( 1 );
+        float32v yf1      = yf0 - float32v( 1 );
 
         xs = FnUtils::InterpQuintic( xs );
         ys = FnUtils::InterpQuintic( ys );
 
-        return float32v( 0.579106986522674560546875f ) * FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0 ), xf0, yf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0 ), xf1, yf0 ), xs ),
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1 ), xf0, yf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1 ), xf1, yf1 ), xs ), ys );
+        return float32v( 0.579106986522674560546875f ) * FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0 ), xf0, yf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0 ), xf1, yf0 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1 ), xf0, yf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1 ), xf1, yf1 ), xs ), ys );
     }
 
-    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z ) const final
+    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z ) const
     {
         float32v xs = FS_Floor_f32( x );
         float32v ys = FS_Floor_f32( y );
@@ -47,23 +62,18 @@ class FS_T<FastNoise::Perlin, FS> : public virtual FastNoise::Perlin, public FS_
         float32v xf0 = xs = x - xs;
         float32v yf0 = ys = y - ys;
         float32v zf0 = zs = z - zs;
-        float32v xf1 = xf0 - float32v( 1 );
-        float32v yf1 = yf0 - float32v( 1 );
-        float32v zf1 = zf0 - float32v( 1 );
+        float32v xf1      = xf0 - float32v( 1 );
+        float32v yf1      = yf0 - float32v( 1 );
+        float32v zf1      = zf0 - float32v( 1 );
 
         xs = FnUtils::InterpQuintic( xs );
         ys = FnUtils::InterpQuintic( ys );
         zs = FnUtils::InterpQuintic( zs );
 
-        return float32v( 0.964921414852142333984375f ) * FnUtils::Lerp( FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z0 ), xf0, yf0, zf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z0 ), xf1, yf0, zf0 ), xs ),
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z0 ), xf0, yf1, zf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z0 ), xf1, yf1, zf0 ), xs ), ys ),
-            FnUtils::Lerp( 
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z1 ), xf0, yf0, zf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z1 ), xf1, yf0, zf1 ), xs ),    
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z1 ), xf0, yf1, zf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z1 ), xf1, yf1, zf1 ), xs ), ys ), zs );
+        return float32v( 0.964921414852142333984375f ) * FnUtils::Lerp( FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z0 ), xf0, yf0, zf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z0 ), xf1, yf0, zf0 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z0 ), xf0, yf1, zf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z0 ), xf1, yf1, zf0 ), xs ), ys ), FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z1 ), xf0, yf0, zf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z1 ), xf1, yf0, zf1 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z1 ), xf0, yf1, zf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z1 ), xf1, yf1, zf1 ), xs ), ys ), zs );
     }
 
-    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z, float32v w ) const final
+    float32v FS_VECTORCALL Gen( int32v seed, float32v x, float32v y, float32v z, float32v w ) const
     {
         float32v xs = FS_Floor_f32( x );
         float32v ys = FS_Floor_f32( y );
@@ -83,27 +93,16 @@ class FS_T<FastNoise::Perlin, FS> : public virtual FastNoise::Perlin, public FS_
         float32v yf0 = ys = y - ys;
         float32v zf0 = zs = z - zs;
         float32v wf0 = ws = w - ws;
-        float32v xf1 = xf0 - float32v( 1 );
-        float32v yf1 = yf0 - float32v( 1 );
-        float32v zf1 = zf0 - float32v( 1 );
-        float32v wf1 = wf0 - float32v( 1 );
+        float32v xf1      = xf0 - float32v( 1 );
+        float32v yf1      = yf0 - float32v( 1 );
+        float32v zf1      = zf0 - float32v( 1 );
+        float32v wf1      = wf0 - float32v( 1 );
 
         xs = FnUtils::InterpQuintic( xs );
         ys = FnUtils::InterpQuintic( ys );
         zs = FnUtils::InterpQuintic( zs );
         ws = FnUtils::InterpQuintic( ws );
 
-        return float32v( 0.964921414852142333984375f ) * FnUtils::Lerp( FnUtils::Lerp( FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z0, w0 ), xf0, yf0, zf0, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z0, w0 ), xf1, yf0, zf0, wf0 ), xs ),
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z0, w0 ), xf0, yf1, zf0, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z0, w0 ), xf1, yf1, zf0, wf0 ), xs ), ys ),
-            FnUtils::Lerp(                                                                                                                                                     
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z1, w0 ), xf0, yf0, zf1, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z1, w0 ), xf1, yf0, zf1, wf0 ), xs ),    
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z1, w0 ), xf0, yf1, zf1, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z1, w0 ), xf1, yf1, zf1, wf0 ), xs ), ys ), zs ),
-            FnUtils::Lerp( FnUtils::Lerp(
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z0, w1 ), xf0, yf0, zf0, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z0, w1 ), xf1, yf0, zf0, wf1 ), xs ),
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z0, w1 ), xf0, yf1, zf0, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z0, w1 ), xf1, yf1, zf0, wf1 ), xs ), ys ),
-            FnUtils::Lerp(                                                                                                                                                     
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z1, w1 ), xf0, yf0, zf1, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z1, w1 ), xf1, yf0, zf1, wf1 ), xs ),    
-            FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z1, w1 ), xf0, yf1, zf1, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z1, w1 ), xf1, yf1, zf1, wf1 ), xs ), ys ), zs ), ws );
+        return float32v( 0.964921414852142333984375f ) * FnUtils::Lerp( FnUtils::Lerp( FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z0, w0 ), xf0, yf0, zf0, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z0, w0 ), xf1, yf0, zf0, wf0 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z0, w0 ), xf0, yf1, zf0, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z0, w0 ), xf1, yf1, zf0, wf0 ), xs ), ys ), FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z1, w0 ), xf0, yf0, zf1, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z1, w0 ), xf1, yf0, zf1, wf0 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z1, w0 ), xf0, yf1, zf1, wf0 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z1, w0 ), xf1, yf1, zf1, wf0 ), xs ), ys ), zs ), FnUtils::Lerp( FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z0, w1 ), xf0, yf0, zf0, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z0, w1 ), xf1, yf0, zf0, wf1 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z0, w1 ), xf0, yf1, zf0, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z0, w1 ), xf1, yf1, zf0, wf1 ), xs ), ys ), FnUtils::Lerp( FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y0, z1, w1 ), xf0, yf0, zf1, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y0, z1, w1 ), xf1, yf0, zf1, wf1 ), xs ), FnUtils::Lerp( FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x0, y1, z1, w1 ), xf0, yf1, zf1, wf1 ), FnUtils::GetGradientDot( FnUtils::HashPrimes( seed, x1, y1, z1, w1 ), xf1, yf1, zf1, wf1 ), xs ), ys ), zs ), ws );
     }
 };

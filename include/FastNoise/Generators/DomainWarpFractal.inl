@@ -8,31 +8,61 @@ class FS_T<FastNoise::DomainWarpFractalProgressive, FS> : public virtual FastNoi
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
 
-    template<typename... P>
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
+        constexpr auto N = Input::N;
+
+        typename Output::LocalBlock o2b;
+        typename Output::LocalBlock o3b;
+        Output                      WeightedStrength( o2b );
+        Output                      Gain( o3b );
+        Input                       i2 = i;
+
         auto* warp = this->GetSourceSIMD( mSource );
+        this->GetSourceValue( warp->GetWarpAmplitude(), u, i, o );
+        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
+        this->GetSourceValue( mGain, u, i, Gain );
 
-        float32v amp = float32v( mFractalBounding ) * this->GetSourceValue( warp->GetWarpAmplitude(), seed, pos... );
-        float32v weightedStrength = this->GetSourceValue( mWeightedStrength, seed, pos... );
-        float32v freq = float32v( warp->GetWarpFrequency() );
-        int32v seedInc = seed;
-
-        float32v gain = this->GetSourceValue( mGain, seed, pos... );
-        float32v lacunarity( mLacunarity );
-
-        float32v strength = warp->Warp( seedInc, amp, (pos * freq)..., pos... );
-
-        for (int i = 1; i < mOctaves; i++)
+        for( uint b = 0; b < BlockSize; ++b )
         {
-            seedInc -= int32v( -1 );
-            freq *= lacunarity;
-            amp *= FnUtils::Lerp( float32v( 1 ), float32v( 1 ) - strength, weightedStrength );
-            amp *= gain;
-            strength = warp->Warp( seedInc, amp, (pos * freq)..., pos... );
+            auto& pos = i2.v[b];
+
+
+            float32v amp              = float32v( mFractalBounding ) * o.output[b];
+            float32v weightedStrength = WeightedStrength.output[b];
+            float32v freq             = float32v( warp->GetWarpFrequency() );
+            int32v   seedInc          = u.seed;
+
+            float32v gain = Gain.output[b];
+            float32v lacunarity( mLacunarity );
+            float32v strength;
+
+            if constexpr( N == 2 )
+                strength = warp->Warp( seedInc, amp, ( pos[0] * freq ), ( pos[1] * freq ), pos[0], pos[1] );
+            else if constexpr( N == 3 )
+                strength = warp->Warp( seedInc, amp, ( pos[0] * freq ), ( pos[1] * freq ), ( pos[2] * freq ), pos[0], pos[1], pos[2] );
+            else if constexpr( N == 4 )
+                strength = warp->Warp( seedInc, amp, ( pos[0] * freq ), ( pos[1] * freq ), ( pos[2] * freq ), ( pos[3] * freq ), pos[0], pos[1], pos[2], pos[3] );
+
+            for( int i = 1; i < mOctaves; i++ )
+            {
+                seedInc -= int32v( -1 );
+                freq *= lacunarity;
+                amp *= FnUtils::Lerp( float32v( 1 ), float32v( 1 ) - strength, weightedStrength );
+                amp *= gain;
+
+                if constexpr( N == 2 )
+                    strength = warp->Warp( seedInc, amp, ( pos[0] * freq ), ( pos[1] * freq ), pos[0], pos[1] );
+                else if constexpr( N == 3 )
+                    strength = warp->Warp( seedInc, amp, ( pos[0] * freq ), ( pos[1] * freq ), ( pos[2] * freq ), pos[0], pos[1], pos[2] );
+                else if constexpr( N == 4 )
+                    strength = warp->Warp( seedInc, amp, ( pos[0] * freq ), ( pos[1] * freq ), ( pos[2] * freq ), ( pos[3] * freq ), pos[0], pos[1], pos[2], pos[3] );
+            }
         }
 
-        return this->GetSourceValue( warp->GetWarpSource(), seed, pos... );
+        this->GetSourceValue( warp->GetWarpSource(), u, i2, o );
     }
 };
 
@@ -42,34 +72,58 @@ class FS_T<FastNoise::DomainWarpFractalIndependant, FS> : public virtual FastNoi
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
 
-    template<typename... P>
-    FS_INLINE float32v GenT( int32v seed, P... pos ) const
+    template<typename Input>
+    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
     {
-        return [this, seed] ( std::remove_reference_t<P>... noisePos, std::remove_reference_t<P>... warpPos )
+        constexpr auto N = Input::N;
+
+        typename Output::LocalBlock o2b;
+        typename Output::LocalBlock o3b;
+        Output                      WeightedStrength( o2b );
+        Output                      Gain( o3b );
+        Input                       i2 = i;
+
+        auto* warp = this->GetSourceSIMD( mSource );
+        this->GetSourceValue( warp->GetWarpAmplitude(), u, i, o );
+        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
+        this->GetSourceValue( mGain, u, i, Gain );
+        for( uint b = 0; b < BlockSize; ++b )
         {
-            auto* warp = this->GetSourceSIMD( mSource );
+            auto  spos = i.v[b];
+            auto& pos  = i2.v[b];
 
-            float32v amp = float32v( mFractalBounding ) * this->GetSourceValue( warp->GetWarpAmplitude(), seed, noisePos... );
-            float32v weightedStrength = this->GetSourceValue( mWeightedStrength, seed, noisePos... );
-            float32v freq = float32v( warp->GetWarpFrequency() );
-            int32v seedInc = seed;
 
-            float32v gain = this->GetSourceValue( mGain, seed, noisePos... );
+            float32v amp              = float32v( mFractalBounding ) * o.output[b];
+            float32v weightedStrength = WeightedStrength.output[b];
+            float32v freq             = float32v( warp->GetWarpFrequency() );
+            int32v   seedInc          = u.seed;
+            float32v gain             = Gain.output[b];
             float32v lacunarity( mLacunarity );
-        
-            float32v strength = warp->Warp( seedInc, amp, (noisePos * freq)..., warpPos... );
-    
+            float32v strength;
+
+            if constexpr( N == 2 )
+                strength = warp->Warp( seedInc, amp, ( spos[0] * freq ), ( spos[1] * freq ), pos[0], pos[1] );
+            else if constexpr( N == 3 )
+                strength = warp->Warp( seedInc, amp, ( spos[0] * freq ), ( spos[1] * freq ), ( spos[2] * freq ), pos[0], pos[1], pos[2] );
+            else if constexpr( N == 4 )
+                strength = warp->Warp( seedInc, amp, ( spos[0] * freq ), ( spos[1] * freq ), ( spos[2] * freq ), ( spos[3] * freq ), pos[0], pos[1], pos[2], pos[3] );
+
             for( int i = 1; i < mOctaves; i++ )
             {
                 seedInc -= int32v( -1 );
                 freq *= lacunarity;
                 amp *= FnUtils::Lerp( float32v( 1 ), float32v( 1 ) - strength, weightedStrength );
                 amp *= gain;
-                strength = warp->Warp( seedInc, amp, (noisePos * freq)..., warpPos... );
-            }
-    
-            return this->GetSourceValue( warp->GetWarpSource(), seed, warpPos... );
 
-        } ( pos..., pos... );
+                if constexpr( N == 2 )
+                    strength = warp->Warp( seedInc, amp, ( spos[0] * freq ), ( spos[1] * freq ), pos[0], pos[1] );
+                else if constexpr( N == 3 )
+                    strength = warp->Warp( seedInc, amp, ( spos[0] * freq ), ( spos[1] * freq ), ( spos[2] * freq ), pos[0], pos[1], pos[2] );
+                else if constexpr( N == 4 )
+                    strength = warp->Warp( seedInc, amp, ( spos[0] * freq ), ( spos[1] * freq ), ( spos[2] * freq ), ( spos[3] * freq ), pos[0], pos[1], pos[2], pos[3] );
+            }
+        }
+
+        this->GetSourceValue( warp->GetWarpSource(), u, i2, o );
     }
 };

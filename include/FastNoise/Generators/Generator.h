@@ -1,7 +1,17 @@
 #pragma once
+#include <algorithm>
+#include <any>
+#include <array>
 #include <cassert>
 #include <cmath>
-#include <algorithm>
+#include <cstdlib>
+#include <memory>
+#include <vector>
+#ifdef _MSC_VER
+#include <malloc.h>
+#endif
+
+#include <cstdint>
 
 #include "FastNoise/FastNoise_Config.h"
 
@@ -11,15 +21,39 @@
 
 namespace FastNoise
 {
+    using uint = std::uint32_t;
+    inline void* AlignedAllocate( size_t al, size_t size )
+    {
+#ifdef _MSC_VER
+        return _aligned_malloc( size, al );
+#else
+        return std::aligned_alloc( al, size );
+#endif
+    }
+
+    inline void AlignedFree( void* d )
+    {
+#ifdef _MSC_VER
+        return _aligned_free( d );
+#else
+        return std::free( d );
+#endif
+    }
+
     enum class Dim
     {
-        X, Y, Z, W,
+        X,
+        Y,
+        Z,
+        W,
         Count
     };
 
-    constexpr static const char* kDim_Strings[] =
-    {
-        "X", "Y", "Z", "W",
+    constexpr static const char* kDim_Strings[] = {
+        "X",
+        "Y",
+        "Z",
+        "W",
     };
 
     enum class DistanceFunction
@@ -31,8 +65,7 @@ namespace FastNoise
         MaxAxis,
     };
 
-    constexpr static const char* kDistanceFunction_Strings[] =
-    {
+    constexpr static const char* kDistanceFunction_Strings[] = {
         "Euclidean",
         "Euclidean Squared",
         "Manhattan",
@@ -42,17 +75,17 @@ namespace FastNoise
 
     struct OutputMinMax
     {
-        float min =  INFINITY;
+        float min = INFINITY;
         float max = -INFINITY;
 
-        OutputMinMax& operator <<( float v )
+        OutputMinMax& operator<<( float v )
         {
             min = std::min( min, v );
             max = std::max( max, v );
             return *this;
         }
 
-        OutputMinMax& operator <<( const OutputMinMax& v )
+        OutputMinMax& operator<<( const OutputMinMax& v )
         {
             min = std::min( min, v.min );
             max = std::max( max, v.max );
@@ -66,7 +99,7 @@ namespace FastNoise
         using Type = T;
 
         SmartNode<const T> base;
-        const void* simdGeneratorPtr = nullptr;
+        const void*        simdGeneratorPtr = nullptr;
 
     protected:
         BaseSource() = default;
@@ -74,7 +107,8 @@ namespace FastNoise
 
     template<typename T>
     struct GeneratorSourceT : BaseSource<T>
-    { };
+    {
+    };
 
     template<typename T>
     struct HybridSourceT : BaseSource<T>
@@ -87,50 +121,151 @@ namespace FastNoise
         }
     };
 
+    struct AlignedDeleter
+    {
+        inline void operator()( void* d )
+        {
+            AlignedFree( d );
+        }
+    };
+
+    struct Buffer
+    {
+        std::unique_ptr<float, AlignedDeleter> data;
+        uint                                   size      = 0;
+        uint                                   capacity  = 0;
+        uint                                   alignment = 32;
+        Buffer()                                         = default;
+        Buffer( Buffer&& )                               = default;
+
+        Buffer& operator=( Buffer&& ) = default;
+
+
+        Buffer( uint al, uint siz ) :
+            data( (float*)AlignedAllocate( al, siz * 4 ) ), size( siz ), capacity( siz ), alignment( al )
+        {
+        }
+
+        Buffer( uint siz ) :
+            data( (float*)AlignedAllocate( 32, siz * 4 ) ), size( siz ), capacity( siz )
+        {
+        }
+
+        Buffer( Buffer const& other ) :
+            Buffer( other.alignment, other.size )
+        {
+            std::memcpy( data.get(), other.data.get(), other.size * 4 );
+        }
+
+
+        Buffer& operator=( Buffer const& other )
+        {
+            *this = Buffer( other.alignment, other.size );
+            std::memcpy( data.get(), other.data.get(), other.size * 4 );
+        }
+
+        float* begin()
+        {
+            return data.get();
+        }
+
+        float const* begin() const
+        {
+            return data.get();
+        }
+
+        float* end()
+        {
+            return data.get() + size;
+        }
+
+        float const* end() const
+        {
+            return data.get() + size;
+        }
+
+        void resize( uint al, size_t size )
+        {
+            if( capacity < size )
+            {
+                data.reset( (float*)AlignedAllocate( al, size * 4 ) );
+                capacity = (uint)size;
+            }
+            this->size = (uint)size;
+        }
+
+        float& operator[]( uint i )
+        {
+            return data.get()[i];
+        }
+
+        float operator[]( uint i ) const
+        {
+            return data.get()[i];
+        }
+
+        uint nbbytes() const
+        {
+            return size * 4;
+        }
+    };
+
     class FASTNOISE_API Generator
     {
     public:
+        enum class GenType
+        {
+            e2D,
+            e3D,
+            e4D,
+            eTiable2D,
+            ePosArray2D,
+            ePosArray3D,
+            ePosArray4D,
+            eSingle2D,
+            eSingle3D,
+            Single4D
+        };
+
+        struct Context
+        {
+            // External API
+            std::array<int, 4> planeId   = { 0, 0, 0, 0 };
+            std::array<int, 4> planeSize = { 1, 1, 1, 1 };
+            Context( Buffer& out ) :
+                output( out )
+            {
+            }
+            // Output
+            Buffer&                 output;
+            FastNoise::OutputMinMax minMax;
+        };
+
         template<typename T>
         friend struct MetadataT;
 
         virtual ~Generator() = default;
 
         virtual FastSIMD::eLevel GetSIMDLevel() const = 0;
-        virtual const Metadata& GetMetadata() const = 0;
+        virtual const Metadata&  GetMetadata() const  = 0;
 
-        virtual OutputMinMax GenUniformGrid2D( float* out,
-            int xStart, int yStart,
-            int xSize,  int ySize,
-            float frequency, int seed ) const = 0;
+        virtual void GenUniformGrid2D( Context& out,
+                                       int xStart, int yStart,
+                                       int xSize, int ySize,
+                                       float frequency, int seed ) const = 0;
 
-        virtual OutputMinMax GenUniformGrid3D( float* out,
-            int xStart, int yStart, int zStart, 
-            int xSize,  int ySize,  int zSize, 
-            float frequency, int seed ) const = 0;
+        virtual void GenUniformGrid3D( Context& out,
+                                       int xStart, int yStart, int zStart,
+                                       int xSize, int ySize, int zSize,
+                                       float frequency, int seed ) const = 0;
 
-        virtual OutputMinMax GenUniformGrid4D( float* out,
-            int xStart, int yStart, int zStart, int wStart,
-            int xSize,  int ySize,  int zSize,  int wSize,
-            float frequency, int seed ) const = 0;
+        virtual void GenUniformGrid4D( Context& out,
+                                       int xStart, int yStart, int zStart, int wStart,
+                                       int xSize, int ySize, int zSize, int wSize,
+                                       float frequency, int seed ) const = 0;
 
-        virtual OutputMinMax GenTileable2D( float* out,
-            int xSize, int ySize, float frequency, int seed ) const = 0; 
-
-        virtual OutputMinMax GenPositionArray2D( float* out, int count,
-            const float* xPosArray, const float* yPosArray,
-            float xOffset, float yOffset, int seed ) const = 0;
-
-        virtual OutputMinMax GenPositionArray3D( float* out, int count,
-            const float* xPosArray, const float* yPosArray, const float* zPosArray, 
-            float xOffset, float yOffset, float zOffset, int seed ) const = 0;
-
-        virtual OutputMinMax GenPositionArray4D( float* out, int count,
-            const float* xPosArray, const float* yPosArray, const float* zPosArray, const float* wPosArray, 
-            float xOffset, float yOffset, float zOffset, float wOffset, int seed ) const = 0;
-
-        virtual float GenSingle2D( float x, float y, int seed ) const = 0;
-        virtual float GenSingle3D( float x, float y, float z, int seed ) const = 0;
-        virtual float GenSingle4D( float x, float y, float z, float w, int seed ) const = 0;
+        virtual void GenTileable2D( Context& out,
+                                    int xSize, int ySize, float frequency, int seed ) const = 0;
 
     protected:
         template<typename T>
@@ -149,7 +284,7 @@ namespace FastNoise
     };
 
     using GeneratorSource = GeneratorSourceT<Generator>;
-    using HybridSource = HybridSourceT<Generator>;
+    using HybridSource    = HybridSourceT<Generator>;
 
     template<typename T>
     struct PerDimensionVariable
@@ -161,7 +296,7 @@ namespace FastNoise
         template<typename U = T>
         PerDimensionVariable( U value = 0 )
         {
-            for( T& element : varArray )
+            for( T& element: varArray )
             {
                 element = value;
             }
@@ -187,15 +322,14 @@ namespace FastNoise
         void AddVariable( const char* name, T defaultV, U&& func, T minV = 0, T maxV = 0 )
         {
             MemberVariable member;
-            member.name = name;
+            member.name         = name;
             member.valueDefault = defaultV;
-            member.valueMin = minV;
-            member.valueMax = maxV;
+            member.valueMin     = minV;
+            member.valueMax     = maxV;
 
             member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
 
-            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v )
-            {
+            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v ) {
                 if( auto* gRealType = dynamic_cast<GetArg<U, 0>>( g ) )
                 {
                     func( gRealType, v );
@@ -208,21 +342,20 @@ namespace FastNoise
         }
 
         template<typename T, typename U, typename = std::enable_if_t<!std::is_enum_v<T>>>
-        void AddVariable( const char* name, T defaultV, void(U::* func)(T), T minV = 0, T maxV = 0 )
+        void AddVariable( const char* name, T defaultV, void ( U::*func )( T ), T minV = 0, T maxV = 0 )
         {
             MemberVariable member;
-            member.name = name;
+            member.name         = name;
             member.valueDefault = defaultV;
-            member.valueMin = minV;
-            member.valueMax = maxV;
+            member.valueMin     = minV;
+            member.valueMax     = maxV;
 
             member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
 
-            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v )
-            {
+            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
                 {
-                    (gRealType->*func)( v );
+                    ( gRealType->*func )( v );
                     return true;
                 }
                 return false;
@@ -232,19 +365,18 @@ namespace FastNoise
         }
 
         template<typename T, typename U, typename = std::enable_if_t<std::is_enum_v<T>>, typename... ENUM_NAMES>
-        void AddVariableEnum( const char* name, T defaultV, void(U::* func)(T), ENUM_NAMES... enumNames )
+        void AddVariableEnum( const char* name, T defaultV, void ( U::*func )( T ), ENUM_NAMES... enumNames )
         {
             MemberVariable member;
-            member.name = name;
-            member.type = MemberVariable::EEnum;
+            member.name         = name;
+            member.type         = MemberVariable::EEnum;
             member.valueDefault = (int)defaultV;
-            member.enumNames = { enumNames... };
+            member.enumNames    = { enumNames... };
 
-            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v )
-            {
+            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
                 {
-                    (gRealType->*func)( (T)v.i );
+                    ( gRealType->*func )( (T)v.i );
                     return true;
                 }
                 return false;
@@ -254,19 +386,18 @@ namespace FastNoise
         }
 
         template<typename T, typename U, size_t ENUM_NAMES, typename = std::enable_if_t<std::is_enum_v<T>>>
-        void AddVariableEnum( const char* name, T defaultV, void(U::* func)(T), const char* const (&enumNames)[ENUM_NAMES] )
+        void AddVariableEnum( const char* name, T defaultV, void ( U::*func )( T ), const char* const ( &enumNames )[ENUM_NAMES] )
         {
             MemberVariable member;
-            member.name = name;
-            member.type = MemberVariable::EEnum;
+            member.name         = name;
+            member.type         = MemberVariable::EEnum;
             member.valueDefault = (int)defaultV;
-            member.enumNames = { enumNames, enumNames + ENUM_NAMES };
+            member.enumNames    = { enumNames, enumNames + ENUM_NAMES };
 
-            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v )
-            {
+            member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
                 {
-                    (gRealType->*func)( (T)v.i );
+                    ( gRealType->*func )( (T)v.i );
                     return true;
                 }
                 return false;
@@ -281,16 +412,15 @@ namespace FastNoise
             for( int idx = 0; (size_t)idx < sizeof( PerDimensionVariable<T>::varArray ) / sizeof( *PerDimensionVariable<T>::varArray ); idx++ )
             {
                 MemberVariable member;
-                member.name = name;
+                member.name         = name;
                 member.valueDefault = defaultV;
-                member.valueMin = minV;
-                member.valueMax = maxV;
+                member.valueMin     = minV;
+                member.valueMax     = maxV;
 
-                member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
+                member.type         = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
                 member.dimensionIdx = idx;
 
-                member.setFunc = [func, idx]( Generator* g, MemberVariable::ValueUnion v )
-                {
+                member.setFunc = [func, idx]( Generator* g, MemberVariable::ValueUnion v ) {
                     if( auto* gRealType = dynamic_cast<GetArg<U, 0>>( g ) )
                     {
                         func( gRealType ).get()[idx] = v;
@@ -304,19 +434,18 @@ namespace FastNoise
         }
 
         template<typename T, typename U>
-        void AddGeneratorSource( const char* name, void(U::* func)(SmartNodeArg<T>) )
+        void AddGeneratorSource( const char* name, void ( U::*func )( SmartNodeArg<T> ) )
         {
             MemberNodeLookup member;
             member.name = name;
 
-            member.setFunc = [func]( Generator* g, SmartNodeArg<> s )
-            {
+            member.setFunc = [func]( Generator* g, SmartNodeArg<> s ) {
                 if( const T* sUpCast = dynamic_cast<const T*>( s.get() ) )
                 {
                     if( U* gRealType = dynamic_cast<U*>( g ) )
                     {
-                        SmartNode<const T> source( s, sUpCast ); 
-                        (gRealType->*func)( source );
+                        SmartNode<const T> source( s, sUpCast );
+                        ( gRealType->*func )( source );
                         return true;
                     }
                 }
@@ -330,21 +459,20 @@ namespace FastNoise
         void AddPerDimensionGeneratorSource( const char* name, U&& func )
         {
             using GeneratorSourceT = typename std::invoke_result_t<U, GetArg<U, 0>>::type::Type;
-            using T = typename GeneratorSourceT::Type;
+            using T                = typename GeneratorSourceT::Type;
 
             for( int idx = 0; (size_t)idx < sizeof( PerDimensionVariable<GeneratorSourceT>::varArray ) / sizeof( *PerDimensionVariable<GeneratorSourceT>::varArray ); idx++ )
             {
                 MemberNodeLookup member;
-                member.name = name;
+                member.name         = name;
                 member.dimensionIdx = idx;
 
-                member.setFunc = [func, idx]( Generator* g, SmartNodeArg<> s )
-                {
+                member.setFunc = [func, idx]( Generator* g, SmartNodeArg<> s ) {
                     if( const T* sUpCast = dynamic_cast<const T*>( s.get() ) )
                     {
                         if( auto* gRealType = dynamic_cast<GetArg<U, 0>>( g ) )
                         {
-                            SmartNode<const T> source( s, sUpCast ); 
+                            SmartNode<const T> source( s, sUpCast );
                             g->SetSourceMemberVariable( func( gRealType ).get()[idx], source );
                             return true;
                         }
@@ -358,33 +486,31 @@ namespace FastNoise
 
 
         template<typename T, typename U>
-        void AddHybridSource( const char* name, float defaultValue, void(U::* funcNode)(SmartNodeArg<T>), void(U::* funcValue)(float) )
+        void AddHybridSource( const char* name, float defaultValue, void ( U::*funcNode )( SmartNodeArg<T> ), void ( U::*funcValue )( float ) )
         {
             MemberHybrid member;
-            member.name = name;
+            member.name         = name;
             member.valueDefault = defaultValue;
 
-            member.setNodeFunc = [funcNode]( Generator* g, SmartNodeArg<> s )
-            {
+            member.setNodeFunc = [funcNode]( Generator* g, SmartNodeArg<> s ) {
                 if( const T* sUpCast = dynamic_cast<const T*>( s.get() ) )
                 {
                     if( U* gRealType = dynamic_cast<U*>( g ) )
                     {
-                        SmartNode<const T> source( s, sUpCast ); 
-                        (gRealType->*funcNode)( source );
+                        SmartNode<const T> source( s, sUpCast );
+                        ( gRealType->*funcNode )( source );
                         return true;
                     }
                 }
                 return false;
             };
 
-            member.setValueFunc = [funcValue]( Generator* g, float v )
-            {
+            member.setValueFunc = [funcValue]( Generator* g, float v ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
                 {
-                    (gRealType->*funcValue)( v );
+                    ( gRealType->*funcValue )( v );
                     return true;
-                }                
+                }
                 return false;
             };
 
@@ -395,22 +521,21 @@ namespace FastNoise
         void AddPerDimensionHybridSource( const char* name, float defaultV, U&& func )
         {
             using HybridSourceT = typename std::invoke_result_t<U, GetArg<U, 0>>::type::Type;
-            using T = typename HybridSourceT::Type;
+            using T             = typename HybridSourceT::Type;
 
             for( int idx = 0; (size_t)idx < sizeof( PerDimensionVariable<HybridSourceT>::varArray ) / sizeof( *PerDimensionVariable<HybridSourceT>::varArray ); idx++ )
             {
                 MemberHybrid member;
-                member.name = name;
+                member.name         = name;
                 member.valueDefault = defaultV;
                 member.dimensionIdx = idx;
 
-                member.setNodeFunc = [func, idx]( Generator* g, SmartNodeArg<> s )
-                {
+                member.setNodeFunc = [func, idx]( Generator* g, SmartNodeArg<> s ) {
                     if( const T* sUpCast = dynamic_cast<const T*>( s.get() ) )
                     {
                         if( auto* gRealType = dynamic_cast<GetArg<U, 0>>( g ) )
                         {
-                            SmartNode<const T> source( s, sUpCast ); 
+                            SmartNode<const T> source( s, sUpCast );
                             g->SetSourceMemberVariable( func( gRealType ).get()[idx], source );
                             return true;
                         }
@@ -418,8 +543,7 @@ namespace FastNoise
                     return false;
                 };
 
-                member.setValueFunc = [func, idx]( Generator* g, float v )
-                {
+                member.setValueFunc = [func, idx]( Generator* g, float v ) {
                     if( auto* gRealType = dynamic_cast<GetArg<U, 0>>( g ) )
                     {
                         func( gRealType ).get()[idx] = v;
@@ -434,10 +558,10 @@ namespace FastNoise
 
     private:
         template<typename F, typename Ret, typename... Args>
-        static std::tuple<Args...> GetArg_Helper( Ret( F::* )(Args...) const );
+        static std::tuple<Args...> GetArg_Helper( Ret ( F::* )( Args... ) const );
 
         template<typename F, size_t I>
-        using GetArg = std::tuple_element_t<I, decltype(GetArg_Helper( &F::operator() ))>;
+        using GetArg = std::tuple_element_t<I, decltype( GetArg_Helper( &F::operator() ) )>;
     };
 #endif
-}
+} // namespace FastNoise

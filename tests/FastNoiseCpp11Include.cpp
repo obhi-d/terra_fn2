@@ -12,15 +12,15 @@ int main()
     node->SetSource( FastNoise::New<FastNoise::Simplex>() );
     node->SetGain( FastNoise::New<FastNoise::Value>() );
 
-    const int size = 4;
+    const int                     size = 4;
+    FastNoise::Buffer             buffer;
+    FastNoise::Generator::Context context( buffer );
 
-    float noise[size * size];
+    node->GenUniformGrid2D( context, 0, 0, size, size, 0.02f, 1337 );
 
-    node->GenUniformGrid2D( noise, 0, 0, size, size, 0.02f, 1337 );
-
-    for( int i = 0; i < sizeof(noise) / sizeof(float); i++ )
+    for( int i = 0; i < context.output.size; i++ )
     {
-        std::cout << noise[i] << ", ";
+        std::cout << context.output[i] << ", ";
     }
 
     std::cout << std::endl;

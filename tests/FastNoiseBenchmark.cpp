@@ -7,33 +7,33 @@
 #include "magic_enum.h"
 
 static const size_t gPositionCount = 8192;
-static float gPositionFloats[gPositionCount]; 
+static float        gPositionFloats[gPositionCount];
 
 FastNoise::SmartNode<> BuildGenerator( benchmark::State& state, const FastNoise::Metadata* metadata, FastSIMD::eLevel level )
-{    
+{
     FastNoise::SmartNode<> generator = metadata->CreateNode( level );
 
     FastNoise::SmartNode<> source = FastNoise::New<FastNoise::Constant>( level );
 
-    for( const auto& memberNode : metadata->memberNodeLookups )
+    for( const auto& memberNode: metadata->memberNodeLookups )
     {
         if( !memberNode.setFunc( generator.get(), source ) )
         {
             // If constant source is not valid try all other node types in order
-            for( const FastNoise::Metadata* tryMetadata : FastNoise::Metadata::GetAll() )
+            for( const FastNoise::Metadata* tryMetadata: FastNoise::Metadata::GetAll() )
             {
                 FastNoise::SmartNode<> trySource = tryMetadata->CreateNode( level );
 
                 // Other node types may also have sources
                 if( memberNode.setFunc( generator.get(), trySource ) )
                 {
-                    for( const auto& tryMemberNode : tryMetadata->memberNodeLookups )
+                    for( const auto& tryMemberNode: tryMetadata->memberNodeLookups )
                     {
                         if( !tryMemberNode.setFunc( trySource.get(), source ) )
                         {
                             state.SkipWithError( "Could not set valid sources for generator" );
                             return {};
-                        }                        
+                        }
                     }
                     break;
                 }
@@ -45,16 +45,17 @@ FastNoise::SmartNode<> BuildGenerator( benchmark::State& state, const FastNoise:
 
 void BenchFastNoiseGenerator2D( benchmark::State& state, const FastNoise::SmartNode<> generator )
 {
-    if (!generator) return;
+    if( !generator )
+        return;
 
-    float* data = new float[gPositionCount];
+    float* data      = new float[gPositionCount];
     size_t totalData = 0;
-    int seed = 0;
+    int    seed      = 0;
 
-    for( auto _ : state )
+    for( auto _: state )
     {
         (void)_;
-        generator->GenPositionArray2D( data, gPositionCount, gPositionFloats, gPositionFloats, 0, 0, seed++ );
+        // generator->GenPositionArray2D( data, gPositionCount, gPositionFloats, gPositionFloats, 0, 0, seed++ );
         totalData += gPositionCount;
     }
 
@@ -64,16 +65,17 @@ void BenchFastNoiseGenerator2D( benchmark::State& state, const FastNoise::SmartN
 
 void BenchFastNoiseGenerator3D( benchmark::State& state, const FastNoise::SmartNode<> generator )
 {
-    if (!generator) return;
+    if( !generator )
+        return;
 
-    float* data = new float[gPositionCount];
+    float* data      = new float[gPositionCount];
     size_t totalData = 0;
-    int seed = 0;
+    int    seed      = 0;
 
-    for( auto _ : state )
+    for( auto _: state )
     {
         (void)_;
-        generator->GenPositionArray3D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0, 0, seed++ );
+        // generator->GenPositionArray3D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0, 0, seed++ );
         totalData += gPositionCount;
     }
 
@@ -83,16 +85,17 @@ void BenchFastNoiseGenerator3D( benchmark::State& state, const FastNoise::SmartN
 
 void BenchFastNoiseGenerator4D( benchmark::State& state, const FastNoise::SmartNode<> generator )
 {
-    if (!generator) return;
+    if( !generator )
+        return;
 
-    float* data = new float[gPositionCount];
+    float* data      = new float[gPositionCount];
     size_t totalData = 0;
-    int seed = 0;
+    int    seed      = 0;
 
-    for( auto _ : state )
+    for( auto _: state )
     {
         (void)_;
-        generator->GenPositionArray4D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0, 0, 0, seed++ );
+        // generator->GenPositionArray4D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0, 0, 0, seed++ );
         totalData += gPositionCount;
     }
 
@@ -107,7 +110,7 @@ void RegisterBenchmarks( FastSIMD::eLevel level, const char* groupName, const ch
 
 #ifdef MAGIC_ENUM_SUPPORTED
     auto enumName = magic_enum::flags::enum_name( level );
-    auto find = enumName.find( '_' );
+    auto find     = enumName.find( '_' );
     if( find != std::string::npos )
     {
         benchName += enumName.data() + find + 1;
@@ -144,15 +147,15 @@ int main( int argc, char** argv )
     {
         gPositionFloats[idx] = (float)idx * 0.6f;
     }
-    
-    for( FastSIMD::eLevel level = FastSIMD::CPUMaxSIMDLevel(); level != FastSIMD::Level_Null; level = (FastSIMD::eLevel)(level >> 1) )
+
+    for( FastSIMD::eLevel level = FastSIMD::CPUMaxSIMDLevel(); level != FastSIMD::Level_Null; level = ( FastSIMD::eLevel )( level >> 1 ) )
     {
-        if( !(level & FastSIMD::COMPILED_SIMD_LEVELS & FastNoise::SUPPORTED_SIMD_LEVELS) )
+        if( !( level & FastSIMD::COMPILED_SIMD_LEVELS & FastNoise::SUPPORTED_SIMD_LEVELS ) )
         {
             continue;
         }
 
-        for( const FastNoise::Metadata* metadata : FastNoise::Metadata::GetAll() )
+        for( const FastNoise::Metadata* metadata: FastNoise::Metadata::GetAll() )
         {
             const char* groupName = "Misc";
 
@@ -163,23 +166,21 @@ int main( int argc, char** argv )
 
             std::string nodeName = FastNoise::Metadata::FormatMetadataNodeName( metadata, false );
 
-           RegisterBenchmarks( level, groupName, nodeName.c_str(), [=]( benchmark::State& st ) { return BuildGenerator( st, metadata, level ); } );
+            RegisterBenchmarks( level, groupName, nodeName.c_str(), [=]( benchmark::State& st ) { return BuildGenerator( st, metadata, level ); } );
         }
 
-        for( const auto& nodeTree : gDemoNodeTrees )
+        for( const auto& nodeTree: gDemoNodeTrees )
         {
-            RegisterBenchmarks( level, "Node Trees", nodeTree[0], [=]( benchmark::State& st )
-            {
+            RegisterBenchmarks( level, "Node Trees", nodeTree[0], [=]( benchmark::State& st ) {
                 FastNoise::SmartNode<> rootNode = FastNoise::NewFromEncodedNodeTree( nodeTree[1], level );
 
                 if( !rootNode )
                 {
-                    st.SkipWithError( "Could not generate node tree from encoded string" );                    
+                    st.SkipWithError( "Could not generate node tree from encoded string" );
                 }
 
                 return rootNode;
             } );
-            
         }
     }
 

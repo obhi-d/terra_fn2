@@ -44,4 +44,8 @@ SpacesInContainerLiterals: 'false'
 SpacesInParentheses: 'true'
 SpacesInSquareBrackets: 'false'
 UseTab: Never
-...
+PointerAlignment: Left
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Right
