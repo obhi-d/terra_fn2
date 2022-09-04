@@ -659,7 +659,7 @@ void FastNoiseNodeEditor::Draw( const Matrix4& transformation, const Matrix4& pr
     ImGui::End();
 
     DoHistory();
-    DoNodeBenchmarks();
+    // DoNodeBenchmarks();
 
     mNoiseTexture.Draw( this );
 
@@ -1275,23 +1275,24 @@ FastNoise::OutputMinMax FastNoiseNodeEditor::GenerateNodePreviewNoise( FastNoise
                                Node::NoiseSize / -2, Node::NoiseSize / -2,
                                Node::NoiseSize, Node::NoiseSize,
                                mNodeFrequency, mNodeSeed );
-
+        break;
     case NoiseTexture::GenType_2DTiled:
         gen->GenTileable2D( context,
                             Node::NoiseSize, Node::NoiseSize,
                             mNodeFrequency, mNodeSeed );
-
+        break;
     case NoiseTexture::GenType_3D:
         gen->GenUniformGrid3D( context,
                                Node::NoiseSize / -2, Node::NoiseSize / -2, 0,
                                Node::NoiseSize, Node::NoiseSize, 1,
                                mNodeFrequency, mNodeSeed );
-
+        break;
     case NoiseTexture::GenType_4D:
         gen->GenUniformGrid4D( context,
                                Node::NoiseSize / -2, Node::NoiseSize / -2, 0, 0,
                                Node::NoiseSize, Node::NoiseSize, 1, 1,
                                mNodeFrequency, mNodeSeed );
+        break;
     case NoiseTexture::GenType_Count:
         break;
     }

@@ -64,20 +64,14 @@ public:
 
     struct Output
     {
+        template<uint N>
         struct HeapBlock
         {
-            std::unique_ptr<float32v[]> output;
-            HeapBlock() :
-                output { new float32v[BlockSize] }
-            {
-            }
-            HeapBlock( uint Times ) :
-                output { new float32v[BlockSize * Times] }
-            {
-            }
+            float32v output[BlockSize * N];
+
             float32v* operator[]( uint i )
             {
-                return output.get() + i * BlockSize;
+                return output + i * BlockSize;
             }
         };
 
@@ -262,14 +256,14 @@ public:
         }
 
         auto constexpr ModulatedBlockSize = FS_Size_32() * BlockSize;
-        size_t blockCount                 = ( totalValues + ModulatedBlockSize - 1 ) / ( ModulatedBlockSize * FS_Size_32() );
+        size_t blockCount                 = ( totalValues + ModulatedBlockSize - 1 ) / ( ModulatedBlockSize );
         size_t index                      = 0;
 
         auto                           blocks = std::vector<std::pair<BlockTy, Output>>( blockCount );
         std::vector<std::future<void>> results;
         results.reserve( blockCount - 1 );
         context.output.resize( alignof( float32v ), blockCount * ModulatedBlockSize );
-        std::fill( context.output.begin(), context.output.end(), 1.0f );
+
         for( size_t b = 0; b < blockCount; ++b )
         {
             auto& input    = blocks[b].first;

@@ -18,12 +18,12 @@ class FS_T<FastNoise::FractalFBm, FS> : public virtual FastNoise::FractalFBm, pu
     {
         constexpr auto N = Input::N;
 
-        typename Output::HeapBlock hb { 4 };
-        Output                     WeightedStrength( hb[0] );
-        Output                     Gain( hb[1] );
-        Output                     Noise( hb[2] );
-        Output                     LastNoise( hb[3] );
-        Input                      i2 = i;
+        typename Output::template HeapBlock<4> hb;
+        Output                                 WeightedStrength( hb[0] );
+        Output                                 Gain( hb[1] );
+        Output                                 Noise( hb[2] );
+        Output                                 LastNoise( hb[3] );
+        Input                                  i2 = i;
 
         this->GetSourceValue( mGain, u, i, Gain );
         this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
@@ -71,12 +71,12 @@ class FS_T<FastNoise::FractalRidged, FS> : public virtual FastNoise::FractalRidg
     {
         constexpr auto N = Input::N;
 
-        typename Output::HeapBlock hb { 4 };
-        Output                     WeightedStrength( hb[0] );
-        Output                     Gain( hb[1] );
-        Output                     Noise( hb[2] );
-        Output                     LastNoise( hb[3] );
-        Input                      i2 = i;
+        typename Output::template HeapBlock<4> hb;
+        Output                                 WeightedStrength( hb[0] );
+        Output                                 Gain( hb[1] );
+        Output                                 Noise( hb[2] );
+        Output                                 LastNoise( hb[3] );
+        Input                                  i2 = i;
 
         this->GetSourceValue( mGain, u, i, Gain );
         this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
@@ -128,13 +128,13 @@ class FS_T<FastNoise::FractalPingPong, FS> : public virtual FastNoise::FractalPi
     {
         constexpr auto N = Input::N;
 
-        typename Output::HeapBlock hb { 5 };
-        Output                     WeightedStrength( hb[0] );
-        Output                     Gain( hb[1] );
-        Output                     Noise( hb[2] );
-        Output                     PingPongStrength( hb[3] );
-        Output                     LastNoise( hb[4] );
-        Input                      i2 = i;
+        typename Output::template HeapBlock<5> hb;
+        Output                                 WeightedStrength( hb[0] );
+        Output                                 Gain( hb[1] );
+        Output                                 Noise( hb[2] );
+        Output                                 PingPongStrength( hb[3] );
+        Output                                 LastNoise( hb[4] );
+        Input                                  i2 = i;
 
         this->GetSourceValue( mGain, u, i, Gain );
         this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );

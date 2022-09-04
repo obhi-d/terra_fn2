@@ -359,13 +359,13 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildMeshData( const 
 MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildVoxel3DMesh( const BuildData& buildData, FastNoise::Buffer& density, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
 {
     FastNoise::Generator::Context ctx( density );
-    auto                          densityValues = density.begin();
     buildData.generator->GenUniformGrid3D( ctx,
                                            buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1,
                                            SIZE_GEN, SIZE_GEN, SIZE_GEN, buildData.frequency, buildData.seed );
-    FastNoise::OutputMinMax minMax   = ctx.minMax;
-    float                   minAir   = INFINITY;
-    float                   maxSolid = -INFINITY;
+    auto                    densityValues = density.begin();
+    FastNoise::OutputMinMax minMax        = ctx.minMax;
+    float                   minAir        = INFINITY;
+    float                   maxSolid      = -INFINITY;
 
 #if FASTNOISE_CALC_MIN_MAX
     if( minMax.min > buildData.isoSurface )
