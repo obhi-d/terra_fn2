@@ -58,6 +58,7 @@ namespace Magnum
             FastNoise::SmartNode<const FastNoise::Generator> generator;
             Vector2i                                         size;
             Vector2i                                         numberOfPlanes = Vector2i( 1, 1 );
+            Vector2i                                         plane;
             Vector4                                          offset;
             float                                            frequency;
             int32_t                                          seed;

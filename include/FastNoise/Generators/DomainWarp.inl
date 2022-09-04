@@ -10,28 +10,28 @@ class FS_T<FastNoise::DomainWarp, FS> : public virtual FastNoise::DomainWarp, pu
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto              N = Input::N;
         typename Output::LocalBlock o2b;
         Output                      o2( o2b );
         Input                       i2 = i;
 
-        this->GetSourceValue( mWarpAmplitude, u, i, o2 );
+        this->GetSourceValue( mWarpAmplitude, params, u, i, o2 );
         auto wrapFreq = float32v( mWarpFrequency );
 
         for( uint b = 0; b < BlockSize; ++b )
         {
             auto& pos = i2.v[b];
             if constexpr( N == 2 )
-                Warp( u.seed, o2.output[b], ( pos[0] * wrapFreq ), ( pos[1] * wrapFreq ), pos[0], pos[1] );
+                Warp( params.seed, o2.output[b], ( pos[0] * wrapFreq ), ( pos[1] * wrapFreq ), pos[0], pos[1] );
             else if constexpr( N == 3 )
-                Warp( u.seed, o2.output[b], ( pos[0] * wrapFreq ), ( pos[1] * wrapFreq ), ( pos[2] * wrapFreq ), pos[0], pos[1], pos[2] );
+                Warp( params.seed, o2.output[b], ( pos[0] * wrapFreq ), ( pos[1] * wrapFreq ), ( pos[2] * wrapFreq ), pos[0], pos[1], pos[2] );
             else if constexpr( N == 4 )
-                Warp( u.seed, o2.output[b], ( pos[0] * wrapFreq ), ( pos[1] * wrapFreq ), ( pos[2] * wrapFreq ), ( pos[3] * wrapFreq ), pos[0], pos[1], pos[2], pos[3] );
+                Warp( params.seed, o2.output[b], ( pos[0] * wrapFreq ), ( pos[1] * wrapFreq ), ( pos[2] * wrapFreq ), ( pos[3] * wrapFreq ), pos[0], pos[1], pos[2], pos[3] );
         }
 
-        GetSourceValue( mSource, u, i2, o );
+        GetSourceValue( mSource, params, u, i2, o );
     }
 
 public:

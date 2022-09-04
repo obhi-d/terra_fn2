@@ -6,15 +6,27 @@ namespace FastNoise
     class DomainWarp : public virtual Generator
     {
     public:
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetWarpAmplitude( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mWarpAmplitude, gen ); }
-        void SetWarpAmplitude( float value ) { mWarpAmplitude = value; } 
-        void SetWarpFrequency( float value ) { mWarpFrequency = value; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetWarpAmplitude( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mWarpAmplitude, gen );
+        }
+        void SetWarpAmplitude( float value )
+        {
+            mWarpAmplitude = value;
+        }
+        void SetWarpFrequency( float value )
+        {
+            mWarpFrequency = value;
+        }
 
     protected:
         GeneratorSource mSource;
-        HybridSource mWarpAmplitude = 1.0f;
-        float mWarpFrequency = 0.5f;
+        HybridSource    mWarpAmplitude = 1.0f;
+        float           mWarpFrequency = 0.5f;
     };
 
 #ifdef FASTNOISE_METADATA
@@ -45,4 +57,4 @@ namespace FastNoise
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
     };
 #endif
-}
+} // namespace FastNoise

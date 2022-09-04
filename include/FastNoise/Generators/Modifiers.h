@@ -264,6 +264,85 @@ namespace FastNoise
     };
 #endif
 
+    class Normalize : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+
+    protected:
+        GeneratorSource mSource;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<Normalize> : MetadataT<Generator>
+    {
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &Normalize::SetSource );
+        }
+    };
+#endif
+
+
+    class Octaves : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+
+        void SetCount( int count )
+        {
+            mCount = count;
+        }
+
+        void SetFactor( float factor )
+        {
+            mFactor = factor;
+        }
+
+    protected:
+        GeneratorSource mSource;
+
+        float mFactor = 0.5f;
+        int   mCount  = 1;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<Octaves> : MetadataT<Generator>
+    {
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &Octaves::SetSource );
+            this->AddVariable( "Count", 4, &Octaves::SetCount );
+            this->AddVariable( "Factor", 0.5f, &Octaves::SetFactor );
+        }
+    };
+#endif
     class ConvertRGBA8 : public virtual Generator
     {
     public:
@@ -535,6 +614,17 @@ namespace FastNoise
     };
 #endif
 
+    enum class FalloffType
+    {
+        ePerPlane,
+        ePlaneEdge
+    };
+
+    constexpr static const char* kFalloffType[] = {
+        "Per Plane",
+        "Plane Edge",
+    };
+
     class EdgeFalloff : public virtual Generator
     {
     public:
@@ -551,11 +641,21 @@ namespace FastNoise
             mEdgeLevel = iLevel;
         }
 
-    protected:
-        GeneratorSource             mSource;
-        PerDimensionVariable<float> mFaloff    = {};
-        float                       mEdgeLevel = 0.0f;
+        void SetFalloffType( FalloffType type )
+        {
+            mType = type;
+        }
 
+        void SetFalloff( float val )
+        {
+            mFalloff = val;
+        }
+
+    protected:
+        GeneratorSource mSource;
+        float           mFalloff   = {};
+        float           mEdgeLevel = 0.0f;
+        FalloffType     mType      = FalloffType::ePerPlane;
         template<typename T>
         friend struct MetadataT;
     };
@@ -569,7 +669,8 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &EdgeFalloff::SetSource );
-            this->AddPerDimensionVariable( "Falloff", 1.0f, []( EdgeFalloff* p ) { return std::ref( p->mFaloff ); } );
+            this->AddVariableEnum( "Fallloff Type", FalloffType::ePerPlane, &EdgeFalloff::SetFalloffType, kFalloffType );
+            this->AddVariable( "Falloff", 1.0f, &EdgeFalloff::SetFalloff );
             this->AddVariable( "EdgeLevel", 0.0f, &EdgeFalloff::SetEdgeLevel );
         }
 

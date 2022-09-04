@@ -10,7 +10,7 @@ class FS_T<FastNoise::Constant, FS> : public virtual FastNoise::Constant, public
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N     = Input::N;
         auto           value = float32v( mValue );
@@ -26,7 +26,7 @@ class FS_T<FastNoise::White, FS> : public virtual FastNoise::White, public FS_T<
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
         for( uint b = 0; b < BlockSize; ++b )
@@ -34,7 +34,7 @@ class FS_T<FastNoise::White, FS> : public virtual FastNoise::White, public FS_T<
             std::array<int32v, N> tmp;
             for( uint n = 0; n < N; ++n )
                 tmp[n] = ( FS_Castf32_i32( i.v[b][n] ) ^ ( FS_Castf32_i32( i.v[b][n] ) >> 16 ) ) * int32v( FnPrimes::Lookup[n] );
-            o.output[b] = FnUtils::GetValueCoord( u.seed, tmp );
+            o.output[b] = FnUtils::GetValueCoord( params.seed, tmp );
         }
     }
 };
@@ -46,7 +46,7 @@ class FS_T<FastNoise::Checkerboard, FS> : public virtual FastNoise::Checkerboard
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N          = Input::N;
         float32v       multiplier = FS_Reciprocal_f32( float32v( mSize ) );
@@ -67,7 +67,7 @@ class FS_T<FastNoise::SineWave, FS> : public virtual FastNoise::SineWave, public
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N          = Input::N;
         float32v       multiplier = FS_Reciprocal_f32( float32v( mScale ) );
@@ -88,7 +88,7 @@ class FS_T<FastNoise::PositionOutput, FS> : public virtual FastNoise::PositionOu
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
         for( uint b = 0; b < BlockSize; ++b )
@@ -110,7 +110,7 @@ class FS_T<FastNoise::DistanceToPoint, FS> : public virtual FastNoise::DistanceT
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
 

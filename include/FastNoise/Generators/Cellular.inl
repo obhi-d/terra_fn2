@@ -23,21 +23,21 @@ class FS_T<FastNoise::CellularValue, FS> : public virtual FastNoise::CellularVal
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
-        GenBlockT( u, i, o, std::make_index_sequence<N> {} );
+        GenBlockT( params, u, i, o, std::make_index_sequence<N> {} );
     }
 
     template<typename Input, size_t... I>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o, std::index_sequence<I...> ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o, std::index_sequence<I...> ) const
     {
         typename Output::LocalBlock lb;
         Output                      jitter( lb );
-        GetSourceValue( mJitterModifier, u, i, jitter );
+        GetSourceValue( mJitterModifier, params, u, i, jitter );
         for( uint b = 0; b < BlockSize; ++b )
         {
-            o.output[b] = Gen( u.seed, jitter.output[b], i.v[b][I]... );
+            o.output[b] = Gen( params.seed, jitter.output[b], i.v[b][I]... );
         }
     }
 
@@ -277,21 +277,21 @@ class FS_T<FastNoise::CellularDistance, FS> : public virtual FastNoise::Cellular
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
-        GenBlockT( u, i, o, std::make_index_sequence<N> {} );
+        GenBlockT( params, u, i, o, std::make_index_sequence<N> {} );
     }
 
     template<typename Input, size_t... I>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o, std::index_sequence<I...> ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o, std::index_sequence<I...> ) const
     {
         typename Output::LocalBlock lb;
         Output                      jitter( lb );
-        GetSourceValue( mJitterModifier, u, i, jitter );
+        GetSourceValue( mJitterModifier, params, u, i, jitter );
         for( uint b = 0; b < BlockSize; ++b )
         {
-            o.output[b] = Gen( u.seed, jitter.output[b], i.v[b][I]... );
+            o.output[b] = Gen( params.seed, jitter.output[b], i.v[b][I]... );
         }
     }
 
@@ -520,27 +520,27 @@ class FS_T<FastNoise::CellularLookup, FS> : public virtual FastNoise::CellularLo
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
-        GenBlockT( u, i, o, std::make_index_sequence<N> {} );
+        GenBlockT( params, u, i, o, std::make_index_sequence<N> {} );
     }
 
     template<typename Input, size_t... I>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o, std::index_sequence<I...> ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o, std::index_sequence<I...> ) const
     {
         constexpr auto              N = Input::N;
         typename Output::LocalBlock lb;
         Output                      jitter( lb );
         Input                       cells;
 
-        GetSourceValue( mJitterModifier, u, i, jitter );
+        GetSourceValue( mJitterModifier, params, u, i, jitter );
         for( uint b = 0; b < BlockSize; ++b )
-            Gen( u.seed, jitter.output[b], cells.v[b], i.v[b][I]... );
+            Gen( params.seed, jitter.output[b], cells.v[b], i.v[b][I]... );
 
-        auto m = Uniform( u );
-        m.seed = u.seed - int32v( -1 );
-        GetSourceValue( mLookup, m, cells, o );
+        auto m = params;
+        m.seed = params.seed - int32v( -1 );
+        GetSourceValue( mLookup, m, u, cells, o );
     }
 
     template<typename Out>

@@ -10,7 +10,7 @@ class FS_T<FastNoise::DomainWarpFractalProgressive, FS> : public virtual FastNoi
 
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
 
@@ -21,9 +21,9 @@ class FS_T<FastNoise::DomainWarpFractalProgressive, FS> : public virtual FastNoi
         Input                       i2 = i;
 
         auto* warp = this->GetSourceSIMD( mSource );
-        this->GetSourceValue( warp->GetWarpAmplitude(), u, i, o );
-        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
-        this->GetSourceValue( mGain, u, i, Gain );
+        this->GetSourceValue( warp->GetWarpAmplitude(), params, u, i, o );
+        this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
+        this->GetSourceValue( mGain, params, u, i, Gain );
 
         for( uint b = 0; b < BlockSize; ++b )
         {
@@ -33,7 +33,7 @@ class FS_T<FastNoise::DomainWarpFractalProgressive, FS> : public virtual FastNoi
             float32v amp              = float32v( mFractalBounding ) * o.output[b];
             float32v weightedStrength = WeightedStrength.output[b];
             float32v freq             = float32v( warp->GetWarpFrequency() );
-            int32v   seedInc          = u.seed;
+            int32v   seedInc          = params.seed;
 
             float32v gain = Gain.output[b];
             float32v lacunarity( mLacunarity );
@@ -62,7 +62,7 @@ class FS_T<FastNoise::DomainWarpFractalProgressive, FS> : public virtual FastNoi
             }
         }
 
-        this->GetSourceValue( warp->GetWarpSource(), u, i2, o );
+        this->GetSourceValue( warp->GetWarpSource(), params, u, i2, o );
     }
 };
 
@@ -73,7 +73,7 @@ class FS_T<FastNoise::DomainWarpFractalIndependant, FS> : public virtual FastNoi
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
 
@@ -84,9 +84,9 @@ class FS_T<FastNoise::DomainWarpFractalIndependant, FS> : public virtual FastNoi
         Input                       i2 = i;
 
         auto* warp = this->GetSourceSIMD( mSource );
-        this->GetSourceValue( warp->GetWarpAmplitude(), u, i, o );
-        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
-        this->GetSourceValue( mGain, u, i, Gain );
+        this->GetSourceValue( warp->GetWarpAmplitude(), params, u, i, o );
+        this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
+        this->GetSourceValue( mGain, params, u, i, Gain );
         for( uint b = 0; b < BlockSize; ++b )
         {
             auto  spos = i.v[b];
@@ -96,7 +96,7 @@ class FS_T<FastNoise::DomainWarpFractalIndependant, FS> : public virtual FastNoi
             float32v amp              = float32v( mFractalBounding ) * o.output[b];
             float32v weightedStrength = WeightedStrength.output[b];
             float32v freq             = float32v( warp->GetWarpFrequency() );
-            int32v   seedInc          = u.seed;
+            int32v   seedInc          = params.seed;
             float32v gain             = Gain.output[b];
             float32v lacunarity( mLacunarity );
             float32v strength;
@@ -124,6 +124,6 @@ class FS_T<FastNoise::DomainWarpFractalIndependant, FS> : public virtual FastNoi
             }
         }
 
-        this->GetSourceValue( warp->GetWarpSource(), u, i2, o );
+        this->GetSourceValue( warp->GetWarpSource(), params, u, i2, o );
     }
 };

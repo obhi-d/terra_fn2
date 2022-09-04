@@ -272,6 +272,9 @@ void NoiseTexture::DoExportRAW()
                         auto copy   = buildData;
                         auto offset = buildData.offset + Magnum::Vector4( (float)x * buildData.size.x(), (float)y * buildData.size.y(), 0, 0 );
 
+                        copy.plane.x() = x;
+                        copy.plane.y() = y;
+
                         BuildTerrainDataRAW( buffer, copy, offset );
 
                         std::string filename = buildData.name;
@@ -452,8 +455,11 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     auto gen = FastNoise::New<Wrapper>( buildData.generator->GetSIMDLevel() );
     gen->SetSource( buildData.generator );
 
-    auto context = FastNoise::Generator::Context( noiseData );
-
+    auto context           = FastNoise::Generator::Context( noiseData );
+    context.planeId[0]     = buildData.plane.x();
+    context.planeId[1]     = buildData.plane.y();
+    context.totalPlanes[0] = buildData.numberOfPlanes.x();
+    context.totalPlanes[1] = buildData.numberOfPlanes.y();
     switch( buildData.generationType )
     {
     case GenType_2D:

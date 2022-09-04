@@ -14,47 +14,44 @@ class FS_T<FastNoise::FractalFBm, FS> : public virtual FastNoise::FractalFBm, pu
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& Sum ) const
     {
         constexpr auto N = Input::N;
 
-        typename Output::template HeapBlock<4> hb;
+        typename Output::template HeapBlock<5> hb;
         Output                                 WeightedStrength( hb[0] );
         Output                                 Gain( hb[1] );
         Output                                 Noise( hb[2] );
-        Output                                 LastNoise( hb[3] );
+        Output                                 LacInp( hb[3] );
+        Output                                 Amp( hb[4] );
         Input                                  i2 = i;
 
-        this->GetSourceValue( mGain, u, i, Gain );
-        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
-        this->GetSourceValue( mSource, u, i, o );
+        this->GetSourceValue( mGain, params, u, i, Gain );
+        this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
+        this->GetSourceValue( mSource, params, u, i, Noise );
 
         float32v lacunarity( mLacunarity );
-        float32v amp( mFractalBounding );
-        int32v   seed = u.seed;
+        Amp.Fill( float32v( mFractalBounding ) );
+
+        auto newParams = params;
 
         for( uint b = 0; b < BlockSize; ++b )
-        {
-            LastNoise.output[b] = o.output[b];
-            o.output[b] *= amp;
-        }
-
+            Sum[b] = Noise[b] * Amp[0];
 
         for( int t = 1; t < mOctaves; t++ )
         {
-            seed -= int32v( -1 );
-            for( uint b = 0; b < BlockSize; ++b )
-                for( uint n = 0; n < N; ++n )
-                    i2.v[b][n] *= lacunarity;
+            newParams.seed -= int32v( -1 );
 
-            this->GetSourceValue( mSource, u, i2, Noise );
+            i2.Multiply( lacunarity );
+            this->GetSourceValue( mSource, newParams, u, i2, LacInp );
+
             for( uint b = 0; b < BlockSize; ++b )
             {
-                amp *= FnUtils::Lerp( float32v( 1 ), ( LastNoise.output[b] + float32v( 1 ) ) * float32v( 0.5f ), WeightedStrength.output[b] );
-                amp *= Gain.output[b];
+                Amp[b] *= FnUtils::Lerp( float32v( 1 ), ( Noise[b] + float32v( 1 ) ) * float32v( 0.5f ), WeightedStrength[b] );
+                Amp[b] *= Gain[b];
 
-                LastNoise.output[b] = Noise.output[b];
-                o.output[b] += LastNoise.output[b] * amp;
+                Noise[b] = LacInp[b];
+                Sum[b] += Noise[b] * Amp[b];
             }
         }
     }
@@ -67,45 +64,46 @@ class FS_T<FastNoise::FractalRidged, FS> : public virtual FastNoise::FractalRidg
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& Sum ) const
     {
         constexpr auto N = Input::N;
 
-        typename Output::template HeapBlock<4> hb;
+        typename Output::template HeapBlock<5> hb;
         Output                                 WeightedStrength( hb[0] );
         Output                                 Gain( hb[1] );
         Output                                 Noise( hb[2] );
-        Output                                 LastNoise( hb[3] );
+        Output                                 LacInp( hb[3] );
+        Output                                 Amp( hb[4] );
         Input                                  i2 = i;
 
-        this->GetSourceValue( mGain, u, i, Gain );
-        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
-        this->GetSourceValue( mSource, u, i, o );
+        this->GetSourceValue( mGain, params, u, i, Gain );
+        this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
+        this->GetSourceValue( mSource, params, u, i, Noise );
+        Amp.Fill( float32v( mFractalBounding ) );
 
         float32v lacunarity( mLacunarity );
-        float32v amp( mFractalBounding );
-        int32v   seed = u.seed;
+        auto     newParams = params;
 
         for( uint b = 0; b < BlockSize; ++b )
         {
-            LastNoise.output[b] = FS_Abs_f32( o.output[b] );
-            o.output[b]         = ( LastNoise.output[b] * float32v( -2 ) + float32v( 1 ) ) * amp;
+            Noise[b] = FS_Abs_f32( Noise[b] );
+            Sum[b]   = ( Noise[b] * float32v( -2 ) + float32v( 1 ) ) * Amp[0];
         }
 
         for( int t = 1; t < mOctaves; t++ )
         {
-            seed -= int32v( -1 );
-            for( uint b = 0; b < BlockSize; ++b )
-                for( uint n = 0; n < N; ++n )
-                    i2.v[b][n] *= lacunarity;
-            this->GetSourceValue( mSource, u, i2, Noise );
+            newParams.seed -= int32v( -1 );
+
+            i2.Multiply( lacunarity );
+            this->GetSourceValue( mSource, newParams, u, i2, LacInp );
+
             for( uint b = 0; b < BlockSize; ++b )
             {
-                amp *= FnUtils::Lerp( float32v( 1 ), float32v( 1 ) - LastNoise.output[b], WeightedStrength.output[b] );
-                amp *= Gain.output[b];
+                Amp[b] *= FnUtils::Lerp( float32v( 1 ), float32v( 1 ) - Noise[b], WeightedStrength[b] );
+                Amp[b] *= Gain[b];
 
-                LastNoise.output[b] = FS_Abs_f32( Noise.output[b] );
-                o.output[b] += ( LastNoise.output[b] * float32v( -2 ) + float32v( 1 ) ) * amp;
+                Noise[b] = FS_Abs_f32( LacInp[b] );
+                Sum[b] += ( Noise[b] * float32v( -2 ) + float32v( 1 ) ) * Amp[b];
             }
         }
     }
@@ -124,49 +122,48 @@ class FS_T<FastNoise::FractalPingPong, FS> : public virtual FastNoise::FractalPi
     }
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& Sum ) const
     {
         constexpr auto N = Input::N;
 
-        typename Output::template HeapBlock<5> hb;
+        typename Output::template HeapBlock<6> hb;
         Output                                 WeightedStrength( hb[0] );
         Output                                 Gain( hb[1] );
         Output                                 Noise( hb[2] );
-        Output                                 PingPongStrength( hb[3] );
-        Output                                 LastNoise( hb[4] );
+        Output                                 LacInp( hb[3] );
+        Output                                 PingPongStrength( hb[4] );
+        Output                                 Amp( hb[5] );
         Input                                  i2 = i;
 
-        this->GetSourceValue( mGain, u, i, Gain );
-        this->GetSourceValue( mWeightedStrength, u, i, WeightedStrength );
-        this->GetSourceValue( mPingPongStrength, u, i, PingPongStrength );
-        this->GetSourceValue( mSource, u, i, o );
+        this->GetSourceValue( mGain, params, u, i, Gain );
+        this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
+        this->GetSourceValue( mPingPongStrength, params, u, i, PingPongStrength );
+        this->GetSourceValue( mSource, params, u, i, Sum );
+        Amp.Fill( float32v( mFractalBounding ) );
 
         float32v lacunarity( mLacunarity );
-        float32v amp( mFractalBounding );
+        auto     newParams = params;
 
         for( uint b = 0; b < BlockSize; ++b )
         {
-            LastNoise.output[b] = PingPong( ( o.output[b] + float32v( 1 ) ) * PingPongStrength.output[b] );
-            o.output[b]         = LastNoise.output[b] * amp;
+            Noise[b] = PingPong( ( Noise[b] + float32v( 1 ) ) * PingPongStrength[b] );
+            Sum[b]   = Noise[b] * Amp[0];
         }
-
-        int32v seed = u.seed;
 
         for( int t = 1; t < mOctaves; t++ )
         {
-            seed -= int32v( -1 );
-            for( uint b = 0; b < BlockSize; ++b )
-                for( uint n = 0; n < N; ++n )
-                    i2.v[b][n] *= lacunarity;
-            this->GetSourceValue( mSource, u, i2, Noise );
+            newParams.seed -= int32v( -1 );
+
+            i2.Multiply( lacunarity );
+            this->GetSourceValue( mSource, params, u, i2, LacInp );
 
             for( uint b = 0; b < BlockSize; ++b )
             {
-                amp *= FnUtils::Lerp( float32v( 1 ), ( LastNoise.output[b] + float32v( 1 ) ) * float32v( 0.5f ), WeightedStrength.output[b] );
-                amp *= Gain.output[b];
+                Amp[b] *= FnUtils::Lerp( float32v( 1 ), ( Noise[b] + float32v( 1 ) ) * float32v( 0.5f ), WeightedStrength[b] );
+                Amp[b] *= Gain[b];
 
-                LastNoise.output[b] = PingPong( ( Noise.output[b] + float32v( 1 ) ) * PingPongStrength.output[b] );
-                o.output[b] += LastNoise.output[b] * amp;
+                Noise[b] = PingPong( ( LacInp[b] + float32v( 1 ) ) * PingPongStrength[b] );
+                Sum[b] += Noise[b] * Amp[b];
             }
         }
     }

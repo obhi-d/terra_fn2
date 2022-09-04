@@ -230,8 +230,8 @@ namespace FastNoise
         struct Context
         {
             // External API
-            std::array<int, 4> planeId   = { 0, 0, 0, 0 };
-            std::array<int, 4> planeSize = { 1, 1, 1, 1 };
+            std::array<int, 4> planeId     = { 0, 0, 0, 0 };
+            std::array<int, 4> totalPlanes = { 1, 1, 1, 1 };
             Context( Buffer& out ) :
                 output( out )
             {

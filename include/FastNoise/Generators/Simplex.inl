@@ -10,10 +10,10 @@ class FS_T<FastNoise::Simplex, FS> : public virtual FastNoise::Simplex, public F
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
-        GenBlockT( u.seed, i, o, std::make_index_sequence<N> {} );
+        GenBlockT( params.seed, i, o, std::make_index_sequence<N> {} );
     }
 
     template<typename Input, size_t... I>
@@ -296,10 +296,10 @@ class FS_T<FastNoise::OpenSimplex2, FS> : public virtual FastNoise::OpenSimplex2
     FASTNOISE_IMPL_GEN_T;
 
     template<typename Input>
-    FS_INLINE void GenBlockT( Uniform const& u, Input& i, Output& o ) const
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         constexpr auto N = Input::N;
-        GenBlockT( u.seed, i, o, std::make_index_sequence<N> {} );
+        GenBlockT( params.seed, i, o, std::make_index_sequence<N> {} );
     }
 
     template<typename Input, size_t... I>

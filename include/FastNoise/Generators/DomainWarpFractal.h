@@ -1,6 +1,6 @@
 #pragma once
-#include "Fractal.h"
 #include "DomainWarp.h"
+#include "Fractal.h"
 
 namespace FastNoise
 {
@@ -17,7 +17,8 @@ namespace FastNoise
     {
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
 
-        MetadataT() : MetadataT<Fractal<DomainWarp>>( "Domain Warp Source"  )
+        MetadataT() :
+            MetadataT<Fractal<DomainWarp>>( "Domain Warp Source" )
         {
             groups.push_back( "Domain Warp" );
         }
@@ -37,10 +38,11 @@ namespace FastNoise
     {
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
 
-        MetadataT() : MetadataT<Fractal<DomainWarp>>( "Domain Warp Source"  )
+        MetadataT() :
+            MetadataT<Fractal<DomainWarp>>( "Domain Warp Source" )
         {
             groups.push_back( "Domain Warp" );
         }
     };
 #endif
-}
+} // namespace FastNoise
