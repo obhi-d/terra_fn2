@@ -17,6 +17,8 @@
 #include "DemoNodeTrees.inl"
 #include "FastNoiseNodeEditor.h"
 #include "ImGuiExtra.h"
+#include "ImGuiFileDialog.h"
+#include "ImageImporter.h"
 
 using namespace Magnum;
 
@@ -459,7 +461,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         {
             if( e.second.empty() )
                 continue;
-            outBuf->appendf( "[%s]%s\n", e.first.c_str(), e.second.c_str() );
+            outBuf->appendf( "-%s:%s\n", e.first.c_str(), e.second.c_str() );
         }
     };
     histroySettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
@@ -473,14 +475,16 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
     histroySettings.ReadLineFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line ) {
         auto*                               nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
         std::pair<std::string, std::string> nameVal;
-        if( line[0] == '[' )
+        if( line[0] == '-' )
         {
             line++;
             int i = 0;
-            while( line[i] && line[i] != ']' )
+            while( line[i] && line[i] != ':' )
                 i++;
             nameVal.first.append( line, i );
-            line += i;
+            if( !line[i] )
+                return;
+            line += ( i + 1 );
             i = 0;
             while( line[i] && line[i] != '\n' && line[i] != '\r' )
                 i++;
@@ -891,6 +895,7 @@ void FastNoiseNodeEditor::DoNodes()
         {
             if( ImGui::MenuItem( "Copy Encoded Node Tree" ) )
             {
+                AddHistoryRecord();
                 ImGui::SetClipboardText( node.second.serialised.c_str() );
                 Debug {} << node.second.serialised.c_str();
             }
@@ -1013,6 +1018,14 @@ void FastNoiseNodeEditor::DoNodes()
                 }
             }
             break;
+            case FastNoise::Metadata::MemberVariable::EBool:
+            {
+                if( ImGui::Checkbox( formatName.c_str(), &nodeData->variables[i].b ) )
+                {
+                    node.second.GeneratePreview();
+                }
+            }
+            break;
             case FastNoise::Metadata::MemberVariable::EInt:
             {
                 if( ImGui::DragInt( formatName.c_str(), &nodeData->variables[i].i, 0.2f, nodeVar.valueMin.i, nodeVar.valueMax.i ) )
@@ -1030,6 +1043,49 @@ void FastNoiseNodeEditor::DoNodes()
                 }
             }
             break;
+            }
+
+            ImNodes::EndStaticAttribute();
+        }
+
+        for( size_t i = 0; i < nodeMetadata->memberImages.size(); ++i )
+        {
+            ImNodes::BeginStaticAttribute( 0 );
+
+            auto& nodeVar = nodeMetadata->memberImages[i];
+            if( ImGui::Button( "Browse" ) )
+            {
+                ImGuiFileDialog::Instance()->OpenDialog( "ChooseFileDlgKey", nodeVar.name, nodeVar.extensions.c_str(), "." );
+            }
+            else
+            {
+                if( nodeData->images[i].sourceName.empty() )
+                    ImGui::Text( "Choose an image", nodeData->images[i].sourceName.c_str() );
+                else
+                    ImGui::Text( "Img: %s", nodeData->images[i].sourceName.c_str() );
+            }
+
+            if( ImGuiFileDialog::Instance()->Display( "ChooseFileDlgKey", 32, ImVec2 { 256.0f, 80.f } ) )
+            {
+                if( ImGuiFileDialog::Instance()->IsOk() )
+                {
+                    nodeData->images[i] = Magnum::ImportImage( ImGuiFileDialog::Instance()->GetFilePathName() );
+                    if( !nodeData->images[i].data )
+                    {
+                        ImGui::OpenPopup( "ImageError" );
+                        bool open = true;
+                        if( ImGui::BeginPopupModal( "ImageError", &open ) )
+                        {
+                            ImGui::Text( "Image format not supported." );
+                            if( ImGui::Button( "Close" ) )
+                                ImGui::CloseCurrentPopup();
+                            ImGui::EndPopup();
+                        }
+                    }
+                    node.second.GeneratePreview();
+                }
+
+                ImGuiFileDialog::Instance()->Close();
             }
 
             ImNodes::EndStaticAttribute();

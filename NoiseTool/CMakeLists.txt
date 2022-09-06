@@ -42,7 +42,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME imgui
     GITHUB_REPOSITORY ocornut/imgui
-    GIT_TAG 1ee252772ae9c0a971d06257bb5c89f628fa696a
+    GIT_TAG 9aae45eb4a05a5a1f96be1ef37eb503a12ceb889
     EXCLUDE_FROM_ALL YES
 )
 # Set dir for find_package(ImGui)
@@ -103,6 +103,7 @@ add_executable(NoiseTool
     "NoiseTexture.cpp"
     "${imnodes_SOURCE_DIR}/imnodes.cpp"
     ${NoiseTool_RESOURCES}
+    "ImGuiFileDialog.cpp"
 ) 
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues

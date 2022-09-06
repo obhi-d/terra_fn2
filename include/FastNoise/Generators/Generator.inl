@@ -1,3 +1,5 @@
+#pragma once
+
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -10,7 +12,7 @@
 #pragma warning( disable : 4250 )
 #endif
 
-constexpr bool NoMultiThread = false;
+static inline constexpr bool NoMultiThread = false;
 
 template<typename FS>
 class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator
@@ -28,11 +30,14 @@ public:
 
     struct Uniform
     {
-        Float4         recipSize = {};
-        Float4         size      = {};
-        Float4         offset    = {};
-        Float4         center    = {};
+        Float4         size         = {};
+        Float4         center       = {};
+        Float4         absSize      = {};
+        Float4         recipSize    = {};
+        Float4         recipAbsSize = {};
+        Float4         absOffset    = {};
         Context const& ctx;
+        float          freq = {};
 
 
         Uniform( Uniform const& ) = default;
@@ -45,8 +50,9 @@ public:
         {
             for( uint i = 0; i < N; ++i )
             {
-                recipSize[i] = 1.0f / size[i];
-                center[i]    = offset[i] + ( size[i] * 0.5f );
+                recipSize[i]    = 1.0f / size[i];
+                recipAbsSize[i] = 1.0f / absSize[i];
+                center[i]       = absOffset[i] + ( absSize[i] * 0.5f );
             }
         }
     };
@@ -230,15 +236,19 @@ public:
         GenBlockT( p, u, i, o );                                                                                 \
     }
 
-#define FASTNOISE_IMPL_GEN_T                                                   \
-    using Uniform = typename FS_T<FastNoise::Generator, FS>::Uniform;          \
-    using Output  = typename FS_T<FastNoise::Generator, FS>::Output;           \
-    using Params  = typename FS_T<FastNoise::Generator, FS>::Params;           \
-    template<unsigned int D>                                                   \
-    using BlockInput = typename FS_T<FastNoise::Generator, FS>::BlockInput<D>; \
-                                                                               \
-    FASTNOISE_IMPL_GEN_T_N( 2 )                                                \
-    FASTNOISE_IMPL_GEN_T_N( 3 )                                                \
+#define FASTNOISE_IMPL_GEN_T                                                                     \
+    using Uniform                            = typename FS_T<FastNoise::Generator, FS>::Uniform; \
+    using Output                             = typename FS_T<FastNoise::Generator, FS>::Output;  \
+    using Params                             = typename FS_T<FastNoise::Generator, FS>::Params;  \
+    using uint                               = typename FS_T<FastNoise::Generator, FS>::uint;    \
+    static constexpr std::uint32_t BlockSize = FS_T<FastNoise::Generator, FS>::BlockSize;        \
+    template<unsigned int D>                                                                     \
+    using BlockInput = typename FS_T<FastNoise::Generator, FS>::template BlockInput<D>;          \
+    using FS_T<FastNoise::Generator, FS>::GetSourceValue;                                        \
+    using FS_T<FastNoise::Generator, FS>::GetSourceSIMD;                                         \
+                                                                                                 \
+    FASTNOISE_IMPL_GEN_T_N( 2 )                                                                  \
+    FASTNOISE_IMPL_GEN_T_N( 3 )                                                                  \
     FASTNOISE_IMPL_GEN_T_N( 4 )
 
 
@@ -306,18 +316,23 @@ public:
 
         size_t totalValues = 1;
 
-        auto   uniform = Uniform( context );
+        auto uniform = Uniform( context );
+
+        uniform.freq = (float)frequency;
+
         Params params;
         params.seed = int32v( seed );
 
         for( std::uint32_t i = 0; i < DimSize; ++i )
         {
             totalValues *= size[i];
-            Idx[i]            = int32v( start[i] );
-            Size[i]           = int32v( size[i] );
-            Max[i]            = Size[i] + Idx[i] + int32v( -1 );
-            uniform.offset[i] = (float)start[i] * frequency;
-            uniform.size[i]   = (float)size[i] * frequency;
+            Idx[i]  = int32v( start[i] );
+            Size[i] = int32v( size[i] );
+            Max[i]  = Size[i] + Idx[i] + int32v( -1 );
+
+            uniform.size[i]      = (float)size[i] * frequency;
+            uniform.absOffset[i] = (float)start[i] * frequency;
+            uniform.absSize[i]   = (float)size[i] * frequency * context.totalPlanes[i];
         }
 
         uniform.ComputeDerived( DimSize );
@@ -406,6 +421,7 @@ public:
         auto   uniform = Uniform( context );
         Params params;
         params.seed     = int32v( seed );
+        uniform.freq    = frequency;
         uniform.size[0] = (float)xSize * frequency;
         uniform.size[1] = (float)ySize * frequency;
 

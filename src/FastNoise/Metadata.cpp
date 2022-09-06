@@ -1,14 +1,17 @@
 #define FASTNOISE_METADATA // Should only be defined here
 
-#include <unordered_set>
-#include <unordered_map>
-#include <type_traits>
-#include <limits>
 #include <cassert>
 #include <cstdint>
+#include <fstream>
+#include <limits>
+#include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 
 #include "FastNoise/Metadata.h"
+
 #include "FastNoise/FastNoise.h"
+
 #include "Base64.h"
 
 using namespace FastNoise;
@@ -21,18 +24,18 @@ NodeData::NodeData( const Metadata* data )
 
     if( metadata )
     {
-        for( const auto& value : metadata->memberVariables )
+        for( const auto& value: metadata->memberVariables )
         {
             variables.push_back( value.valueDefault );
         }
 
-        for( const auto& value : metadata->memberNodeLookups )
+        for( const auto& value: metadata->memberNodeLookups )
         {
             (void)value;
             nodeLookups.push_back( nullptr );
         }
 
-        for( const auto& value : metadata->memberHybrids )
+        for( const auto& value: metadata->memberHybrids )
         {
             hybrids.emplace_back( nullptr, value.valueDefault );
         }
@@ -44,7 +47,28 @@ void AddToDataStream( std::vector<uint8_t>& dataStream, T value )
 {
     for( size_t i = 0; i < sizeof( T ); i++ )
     {
-        dataStream.push_back( (uint8_t)(value >> (i * 8)) );        
+        dataStream.push_back( (uint8_t)( value >> ( i * 8 ) ) );
+    }
+}
+
+void AddToDataStream( std::vector<uint8_t>& dataStream, ImageData const& img )
+{
+    auto size = img.size();
+    AddToDataStream( dataStream, img.width );
+    AddToDataStream( dataStream, img.height );
+    AddToDataStream( dataStream, img.pixelWidth );
+    bool hasData = size > 0 && !img.sourceName.empty();
+    AddToDataStream( dataStream, hasData );
+    if( hasData )
+    {
+        auto current = dataStream.size();
+        dataStream.resize( current + img.sourceName.length() + 1 );
+        std::memcpy( &dataStream[current], img.sourceName.c_str(), img.sourceName.length() + 1 );
+
+        std::filesystem::path imgPath = img.sourceName;
+        imgPath.replace_extension( std::filesystem::path( ".raw" ) );
+        std::basic_ofstream<std::uint8_t> ifs( imgPath, std::ios::binary );
+        ifs.write( img.data.get(), img.width * img.height * img.pixelWidth );
     }
 }
 
@@ -55,9 +79,9 @@ bool SerialiseNodeDataInternal( NodeData* nodeData, bool fixUp, std::vector<uint
     const Metadata* metadata = nodeData->metadata;
 
     if( !metadata ||
-        nodeData->variables.size() != metadata->memberVariables.size()   ||
-        nodeData->nodeLookups.size()     != metadata->memberNodeLookups.size() ||
-        nodeData->hybrids.size()   != metadata->memberHybrids.size()     )
+        nodeData->variables.size() != metadata->memberVariables.size() ||
+        nodeData->nodeLookups.size() != metadata->memberNodeLookups.size() ||
+        nodeData->hybrids.size() != metadata->memberHybrids.size() )
     {
         assert( 0 ); // Member size mismatch with metadata
         return false;
@@ -67,15 +91,15 @@ bool SerialiseNodeDataInternal( NodeData* nodeData, bool fixUp, std::vector<uint
     {
         dependencies.insert( nodeData );
 
-        // Null any dependency loops 
-        for( auto& node : nodeData->nodeLookups )
+        // Null any dependency loops
+        for( auto& node: nodeData->nodeLookups )
         {
             if( dependencies.find( node ) != dependencies.end() )
             {
                 node = nullptr;
             }
         }
-        for( auto& hybrid : nodeData->hybrids )
+        for( auto& hybrid: nodeData->hybrids )
         {
             if( dependencies.find( hybrid.first ) != dependencies.end() )
             {
@@ -166,14 +190,22 @@ bool SerialiseNodeDataInternal( NodeData* nodeData, bool fixUp, std::vector<uint
         }
     }
 
+    // File
+    for( size_t i = 0; i < metadata->memberImages.size(); i++ )
+    {
+        if( i >= nodeData->images.size() )
+            nodeData->images.resize( i + 1 );
+        AddToDataStream( dataStream, nodeData->images[i] );
+    }
+
     referenceIds.emplace( nodeData, (uint16_t)referenceIds.size() );
 
-    return true; 
+    return true;
 }
 
 std::string Metadata::SerialiseNodeData( NodeData* nodeData, bool fixUp )
 {
-    std::vector<uint8_t> serialData;
+    std::vector<uint8_t>                          serialData;
     std::unordered_map<const NodeData*, uint16_t> referenceIds;
 
     if( !SerialiseNodeDataInternal( nodeData, fixUp, serialData, referenceIds ) )
@@ -197,6 +229,33 @@ bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, T& 
     return true;
 }
 
+bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, ImageData& img )
+{
+    bool hasData = false;
+    GetFromDataStream( dataStream, idx, img.width );
+    GetFromDataStream( dataStream, idx, img.height );
+    GetFromDataStream( dataStream, idx, img.pixelWidth );
+    GetFromDataStream( dataStream, idx, hasData );
+
+    if( hasData )
+    {
+        std::string value = "";
+        for( ; idx < dataStream.size() && dataStream[idx]; ++idx )
+            value += (char)dataStream[idx];
+
+        auto size = img.width * img.height * img.pixelWidth;
+
+        std::filesystem::path imgPath = value;
+        imgPath.replace_extension( ".raw" );
+        auto fileSize = std::filesystem::file_size( imgPath );
+        img.data      = std::shared_ptr<std::uint8_t>( (std::uint8_t*)FastNoise::AlignedAllocate( 32, fileSize ), AlignedByteDeleter {} );
+        std::basic_ifstream<std::uint8_t> ifs( imgPath, std::ios::binary );
+        ifs.read( img.data.get(), fileSize );
+    }
+
+    return true;
+}
+
 SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialisedNodeData, size_t& serialIdx, std::vector<SmartNode<>>& referenceNodes, FastSIMD::eLevel level = FastSIMD::Level_Null )
 {
     uint16_t nodeId;
@@ -216,7 +275,7 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
 
         if( referenceId >= referenceNodes.size() )
         {
-            return nullptr;            
+            return nullptr;
         }
 
         return referenceNodes[referenceId];
@@ -233,7 +292,7 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
     SmartNode<> generator = metadata->CreateNode( level );
 
     // Member variables
-    for( const auto& var : metadata->memberVariables )
+    for( const auto& var: metadata->memberVariables )
     {
         Metadata::MemberVariable::ValueUnion v;
 
@@ -246,7 +305,7 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
     }
 
     // Member nodes
-    for( const auto& node : metadata->memberNodeLookups )
+    for( const auto& node: metadata->memberNodeLookups )
     {
         SmartNode<> nodeGen = DeserialiseSmartNodeInternal( serialisedNodeData, serialIdx, referenceNodes, level );
 
@@ -257,7 +316,7 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
     }
 
     // Member variables
-    for( const auto& hybrid : metadata->memberHybrids )
+    for( const auto& hybrid: metadata->memberHybrids )
     {
         uint8_t isGenerator;
         // 1 byte to indicate:
@@ -291,6 +350,19 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
         }
     }
 
+    // Member file
+    for( const auto& var: metadata->memberImages )
+    {
+        ImageData f;
+
+        if( !GetFromDataStream( serialisedNodeData, serialIdx, f ) )
+        {
+            return nullptr;
+        }
+
+        var.setFunc( generator.get(), f );
+    }
+
     referenceNodes.emplace_back( generator );
 
     return generator;
@@ -299,7 +371,7 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
 SmartNode<> FastNoise::NewFromEncodedNodeTree( const char* serialisedBase64NodeData, FastSIMD::eLevel level )
 {
     std::vector<uint8_t> dataStream = Base64::Decode( serialisedBase64NodeData );
-    size_t startIdx = 0;
+    size_t               startIdx   = 0;
 
     std::vector<SmartNode<>> referenceNodes;
 
@@ -342,7 +414,7 @@ NodeData* DeserialiseNodeDataInternal( const std::vector<uint8_t>& serialisedNod
     std::unique_ptr<NodeData> nodeData( new NodeData( metadata ) );
 
     // Member variables
-    for( auto& var : nodeData->variables )
+    for( auto& var: nodeData->variables )
     {
         if( !GetFromDataStream( serialisedNodeData, serialIdx, var ) )
         {
@@ -351,7 +423,7 @@ NodeData* DeserialiseNodeDataInternal( const std::vector<uint8_t>& serialisedNod
     }
 
     // Member nodes
-    for( auto& node : nodeData->nodeLookups )
+    for( auto& node: nodeData->nodeLookups )
     {
         node = DeserialiseNodeDataInternal( serialisedNodeData, nodeDataOut, serialIdx );
 
@@ -362,7 +434,7 @@ NodeData* DeserialiseNodeDataInternal( const std::vector<uint8_t>& serialisedNod
     }
 
     // Member hybrids
-    for( auto& hybrid : nodeData->hybrids )
+    for( auto& hybrid: nodeData->hybrids )
     {
         uint8_t isGenerator;
         // 1 byte to indicate:
@@ -392,13 +464,13 @@ NodeData* DeserialiseNodeDataInternal( const std::vector<uint8_t>& serialisedNod
         }
     }
 
-    return nodeDataOut.emplace_back( std::move( nodeData ) ).get();  
+    return nodeDataOut.emplace_back( std::move( nodeData ) ).get();
 }
 
 NodeData* Metadata::DeserialiseNodeData( const char* serialisedBase64NodeData, std::vector<std::unique_ptr<NodeData>>& nodeDataOut )
 {
     std::vector<uint8_t> dataStream = Base64::Decode( serialisedBase64NodeData );
-    size_t startIdx = 0;
+    size_t               startIdx   = 0;
 
     return DeserialiseNodeDataInternal( dataStream, nodeDataOut, startIdx );
 }
@@ -416,7 +488,7 @@ std::string Metadata::FormatMetadataNodeName( const Metadata* metadata, bool rem
 
     if( removeGroups )
     {
-        for( auto group : metadata->groups )
+        for( auto group: metadata->groups )
         {
             size_t start_pos = string.find( group );
             if( start_pos != std::string::npos )
@@ -459,20 +531,21 @@ std::unique_ptr<const MetadataT<T>> CreateMetadataInstance( const char* classNam
 #define FASTNOISE_GET_MEMORY_ALLOCATOR() , &SmartNodeManager::Allocate
 #endif
 
-#define FASTSIMD_BUILD_CLASS2( CLASS ) \
-const std::unique_ptr<const FastNoise::MetadataT<CLASS>> g ## CLASS ## Metadata = CreateMetadataInstance<CLASS>( #CLASS );\
-template<> FASTNOISE_API const FastNoise::Metadata& FastNoise::Impl::GetMetadata<CLASS>()\
-{\
-    return *g ## CLASS ## Metadata;\
-}\
-const FastNoise::Metadata& CLASS::GetMetadata() const\
-{\
-    return FastNoise::Impl::GetMetadata<CLASS>();\
-}\
-SmartNode<> FastNoise::MetadataT<CLASS>::CreateNode( FastSIMD::eLevel l ) const\
-{\
-    return SmartNode<>( FastSIMD::New<CLASS>( l FASTNOISE_GET_MEMORY_ALLOCATOR() ) );\
-}
+#define FASTSIMD_BUILD_CLASS2( CLASS )                                                                                     \
+    const std::unique_ptr<const FastNoise::MetadataT<CLASS>> g##CLASS##Metadata = CreateMetadataInstance<CLASS>( #CLASS ); \
+    template<>                                                                                                             \
+    FASTNOISE_API const FastNoise::Metadata& FastNoise::Impl::GetMetadata<CLASS>()                                         \
+    {                                                                                                                      \
+        return *g##CLASS##Metadata;                                                                                        \
+    }                                                                                                                      \
+    const FastNoise::Metadata& CLASS::GetMetadata() const                                                                  \
+    {                                                                                                                      \
+        return FastNoise::Impl::GetMetadata<CLASS>();                                                                      \
+    }                                                                                                                      \
+    SmartNode<> FastNoise::MetadataT<CLASS>::CreateNode( FastSIMD::eLevel l ) const                                        \
+    {                                                                                                                      \
+        return SmartNode<>( FastSIMD::New<CLASS>( l FASTNOISE_GET_MEMORY_ALLOCATOR() ) );                                  \
+    }
 
 #define FASTSIMD_BUILD_CLASS( CLASS ) FASTSIMD_BUILD_CLASS2( CLASS )
 

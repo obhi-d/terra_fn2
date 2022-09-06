@@ -4,16 +4,15 @@
 #include <array>
 #include <cassert>
 #include <cmath>
-#include <cstdlib>
-#include <memory>
+#include <cstddef>
+#include <string>
 #include <vector>
-#ifdef _MSC_VER
-#include <malloc.h>
-#endif
 
 #include <cstdint>
 
+#include "FastNoise/AllocUtils.h"
 #include "FastNoise/FastNoise_Config.h"
+#include "FastNoise/ImageData.h"
 
 #if !defined( FASTNOISE_METADATA ) && defined( __INTELLISENSE__ )
 //#define FASTNOISE_METADATA
@@ -21,25 +20,6 @@
 
 namespace FastNoise
 {
-    using uint = std::uint32_t;
-    inline void* AlignedAllocate( size_t al, size_t size )
-    {
-#ifdef _MSC_VER
-        return _aligned_malloc( size, al );
-#else
-        return std::aligned_alloc( al, size );
-#endif
-    }
-
-    inline void AlignedFree( void* d )
-    {
-#ifdef _MSC_VER
-        return _aligned_free( d );
-#else
-        return std::free( d );
-#endif
-    }
-
     enum class Dim
     {
         X,
@@ -118,14 +98,6 @@ namespace FastNoise
         HybridSourceT( float f = 0.0f )
         {
             constant = f;
-        }
-    };
-
-    struct AlignedDeleter
-    {
-        inline void operator()( void* d )
-        {
-            AlignedFree( d );
         }
     };
 
@@ -327,7 +299,7 @@ namespace FastNoise
             member.valueMin     = minV;
             member.valueMax     = maxV;
 
-            member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
+            member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : ( std::is_same_v<T, bool> ? MemberVariable::EBool : MemberVariable::EInt );
 
             member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v ) {
                 if( auto* gRealType = dynamic_cast<GetArg<U, 0>>( g ) )
@@ -350,7 +322,7 @@ namespace FastNoise
             member.valueMin     = minV;
             member.valueMax     = maxV;
 
-            member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
+            member.type = std::is_same_v<T, float> ? MemberVariable::EFloat : ( std::is_same_v<T, bool> ? MemberVariable::EBool : MemberVariable::EInt );
 
             member.setFunc = [func]( Generator* g, MemberVariable::ValueUnion v ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
@@ -417,7 +389,7 @@ namespace FastNoise
                 member.valueMin     = minV;
                 member.valueMax     = maxV;
 
-                member.type         = std::is_same_v<T, float> ? MemberVariable::EFloat : MemberVariable::EInt;
+                member.type         = std::is_same_v<T, float> ? MemberVariable::EFloat : ( std::is_same_v<T, bool> ? MemberVariable::EBool : MemberVariable::EInt );
                 member.dimensionIdx = idx;
 
                 member.setFunc = [func, idx]( Generator* g, MemberVariable::ValueUnion v ) {
@@ -554,6 +526,23 @@ namespace FastNoise
 
                 memberHybrids.push_back( member );
             }
+        }
+
+        template<typename U>
+        void AddVariableImage( const char* name, const char* extensions, void ( U::*func )( ImageData ) )
+        {
+            MemberImage member;
+            member.name       = name;
+            member.extensions = extensions;
+            member.setFunc    = [func]( Generator* g, ImageData s ) {
+                if( U* gRealType = dynamic_cast<U*>( g ) )
+                {
+                    ( gRealType->*func )( std::move( s ) );
+                    return true;
+                }
+                return false;
+            };
+            memberImages.push_back( member );
         }
 
     private:

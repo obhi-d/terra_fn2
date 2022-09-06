@@ -1,4 +1,4 @@
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 
 set(install_targets ${install_targets} FastNoise PARENT_SCOPE)
 
@@ -41,7 +41,8 @@ list(APPEND FastNoise_generators_headers ${FastNoise_generators_inl})
 set(FastNoise_source
     FastNoise/Metadata.cpp
     FastNoise/SmartNode.cpp
-    FastNoise/FastNoise_C.cpp)
+    FastNoise/FastNoise_C.cpp
+    )
 
 source_group("FastSIMD" FILES ${FastSIMD_headers})
 source_group("FastSIMD" FILES ${FastSIMD_sources})

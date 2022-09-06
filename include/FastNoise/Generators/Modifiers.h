@@ -343,6 +343,55 @@ namespace FastNoise
         }
     };
 #endif
+
+
+    class Clamp : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+
+        void SetMax( float value )
+        {
+            mMax = value;
+        }
+
+        void SetMin( float value )
+        {
+            mMin = value;
+        }
+
+    protected:
+        GeneratorSource mSource;
+
+        float mMax = 0.0f;
+        float mMin = 1.0f;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<Clamp> : MetadataT<Generator>
+    {
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &Clamp::SetSource );
+            this->AddVariable( "Min", -1.0f, &Clamp::SetMin );
+            this->AddVariable( "Max", 1.0f, &Clamp::SetMax );
+        }
+    };
+#endif
+
     class ConvertRGBA8 : public virtual Generator
     {
     public:
@@ -678,4 +727,60 @@ namespace FastNoise
     };
 
 #endif
+
+    class StrataScaleMask : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+
+        void SetMinScale( float iLevel )
+        {
+            mMinScale = iLevel;
+        }
+
+        void SetMaxScale( float iLevel )
+        {
+            mMaxScale = iLevel;
+        }
+
+        void SetImage( ImageData val )
+        {
+            mImage = val;
+        }
+
+    protected:
+        GeneratorSource mSource;
+        float           mMinScale = 0.0f;
+        float           mMaxScale = 1.0f;
+        ImageData       mImage;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<StrataScaleMask> : MetadataT<Generator>
+    {
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &StrataScaleMask::SetSource );
+            this->AddVariableImage( "StrataSource", ".png,.jpeg,.jpg,.tga,.bmp,.dds,.ktx2", &StrataScaleMask::SetImage );
+            this->AddVariable( "MinScale", -1.0f, &StrataScaleMask::SetMinScale, -1000.0f, 1000.0f );
+            this->AddVariable( "MaxScale", 1.0f, &StrataScaleMask::SetMaxScale, -1000.0f, 1000.0f );
+        }
+
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+    };
+
+#endif
+
 } // namespace FastNoise

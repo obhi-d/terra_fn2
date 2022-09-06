@@ -187,6 +187,28 @@ class FS_T<FastNoise::Octaves, FS> : public virtual FastNoise::Octaves, public F
 };
 
 template<typename FS>
+class FS_T<FastNoise::Clamp, FS> : public virtual FastNoise::Clamp, public FS_T<FastNoise::Generator, FS>
+{
+    FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
+
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& Noise ) const
+    {
+
+        this->GetSourceValue( mSource, params, u, i, Noise );
+        auto max = float32v( mMax );
+        auto min = float32v( mMin );
+        for( uint i = 0; i < BlockSize; ++i )
+        {
+            Noise[i] = FS_Select_f32( Noise[i] < min, min, Noise[i] );
+            Noise[i] = FS_Select_f32( Noise[i] > max, max, Noise[i] );
+        }
+    }
+};
+
+template<typename FS>
 class FS_T<FastNoise::ConvertRGBA8, FS> : public virtual FastNoise::ConvertRGBA8, public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
@@ -429,6 +451,51 @@ class FS_T<FastNoise::EdgeFalloff, FS> : public virtual FastNoise::EdgeFalloff, 
                 o.output[b] = value;
             }
         }
+        // u.ctx.
+    }
+};
+
+
+template<typename FS>
+class FS_T<FastNoise::StrataScaleMask, FS> : public virtual FastNoise::StrataScaleMask, public FS_T<FastNoise::Generator, FS>
+{
+    FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto N = Input::N;
+
+        if( N == 2 && mImage.data.get() )
+        {
+            auto fullX  = float32v( u.recipAbsSize[0] );
+            auto fullY  = float32v( u.recipAbsSize[1] );
+            auto halfX  = float32v( u.absSize[0] * 0.5f );
+            auto halfY  = float32v( u.absSize[1] * 0.5f );
+            auto minS   = float32v( mMinScale );
+            auto rangeS = float32v( mMaxScale - mMinScale );
+            this->GetSourceValue( mSource, params, u, i, o );
+            for( uint b = 0; b < BlockSize; ++b )
+            {
+                auto     vecU = ( i.v[b][0] + halfX ) * fullX;
+                auto     vecV = ( i.v[b][1] + halfY ) * fullY;
+                float32v sample;
+                // we cannot vector sample the image so fill up a vector
+                {
+                    float* u = (float*)&vecU;
+                    float* v = (float*)&vecV;
+                    float* d = (float*)&sample;
+                    for( uint p = 0; p < FS_Size_32(); ++p )
+                    {
+                        d[p] = mImage.sample( u[p], v[p] );
+                    }
+                }
+                o.output[b] = ( ( sample * rangeS ) + minS ) * o.output[b];
+            }
+        }
+        else
+            this->GetSourceValue( mSource, params, u, i, o );
         // u.ctx.
     }
 };

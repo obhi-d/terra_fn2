@@ -1,11 +1,13 @@
 #pragma once
-#include <functional>
-#include <vector>
-#include <string>
 #include <cstdint>
+#include <filesystem>
+#include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "FastNoise_Config.h"
+#include "ImageData.h"
 
 #pragma warning( push )
 #pragma warning( disable : 4251 )
@@ -52,7 +54,7 @@ namespace FastNoise
         static const Metadata& Get()
         {
             static_assert( std::is_base_of<Generator, T>::value, "This function should only be used for FastNoise node classes, for example FastNoise::Simplex" );
-            static_assert( std::is_member_function_pointer<decltype(&T::GetMetadata)>::value, "Cannot get Metadata for abstract node class, use a derived class, for example: Fractal -> FractalFBm" );
+            static_assert( std::is_member_function_pointer<decltype( &T::GetMetadata )>::value, "Cannot get Metadata for abstract node class, use a derived class, for example: Fractal -> FractalFBm" );
 
             return Impl::GetMetadata<T>();
         }
@@ -77,7 +79,7 @@ namespace FastNoise
         struct Member
         {
             const char* name;
-            int dimensionIdx = -1;            
+            int         dimensionIdx = -1;
         };
 
         /// <summary>
@@ -103,13 +105,21 @@ namespace FastNoise
             {
                 EFloat,
                 EInt,
-                EEnum
+                EBool,
+                EEnum,
+                EFilePath
             };
 
             union ValueUnion
             {
                 float f;
-                int i;
+                int   i;
+                bool  b;
+
+                ValueUnion( bool v )
+                {
+                    b = v;
+                }
 
                 ValueUnion( float v = 0 )
                 {
@@ -131,14 +141,14 @@ namespace FastNoise
                     return i;
                 }
 
-                bool operator ==( const ValueUnion& rhs ) const
+                bool operator==( const ValueUnion& rhs ) const
                 {
                     return i == rhs.i;
                 }
             };
 
-            eType type;
-            ValueUnion valueDefault, valueMin, valueMax;
+            eType                    type;
+            ValueUnion               valueDefault, valueMin, valueMax;
             std::vector<const char*> enumNames;
 
             // Function to set value for given generator
@@ -169,13 +179,21 @@ namespace FastNoise
             std::function<bool( Generator*, SmartNodeArg<> )> setNodeFunc;
         };
 
-        uint16_t id;
-        const char* name;
+        // Set a string
+        struct MemberImage : Member
+        {
+            std::string                                             extensions = ".";
+            std::function<bool( Generator*, FastNoise::ImageData )> setFunc;
+        };
+
+        uint16_t                 id;
+        const char*              name;
         std::vector<const char*> groups;
 
         std::vector<MemberVariable>   memberVariables;
         std::vector<MemberNodeLookup> memberNodeLookups;
         std::vector<MemberHybrid>     memberHybrids;
+        std::vector<MemberImage>      memberImages;
 
         /// <summary>
         /// Create new instance of a FastNoise node from metadata
@@ -211,19 +229,21 @@ namespace FastNoise
     {
         NodeData( const Metadata* metadata );
 
-        const Metadata* metadata;
+        const Metadata*                                   metadata;
         std::vector<Metadata::MemberVariable::ValueUnion> variables;
-        std::vector<NodeData*> nodeLookups;
-        std::vector<std::pair<NodeData*, float>> hybrids;
+        std::vector<NodeData*>                            nodeLookups;
+        std::vector<std::pair<NodeData*, float>>          hybrids;
+        std::vector<FastNoise::ImageData>                 images;
 
-        bool operator ==( const NodeData& rhs ) const
+        bool operator==( const NodeData& rhs ) const
         {
             return metadata == rhs.metadata &&
                 variables == rhs.variables &&
                 nodeLookups == rhs.nodeLookups &&
-                hybrids == rhs.hybrids;
+                hybrids == rhs.hybrids &&
+                images == rhs.images;
         }
     };
-}
+} // namespace FastNoise
 
 #pragma warning( pop )
