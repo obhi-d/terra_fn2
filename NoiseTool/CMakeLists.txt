@@ -1,7 +1,7 @@
 CPMAddPackage(
     NAME corrade
     GITHUB_REPOSITORY mosra/corrade
-    GIT_TAG d44ca683c12ed28fce1d27662f24edee2d7e2c6a
+    GIT_TAG 61d1b58cbcb159837bca506b5336a810da67f0a7
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
@@ -26,7 +26,7 @@ CPMAddPackage(
 CPMAddPackage(
     NAME magnum
     GITHUB_REPOSITORY mosra/magnum
-    GIT_TAG a218ddfa9434201aaca207ea9c8e87fea91a0757
+    GIT_TAG fac6f4da261930c7035bf51f66091e350905720b
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
@@ -34,15 +34,18 @@ CPMAddPackage(
         "BUILD_PLUGINS_STATIC ON"
         "WITH_GLFWAPPLICATION ON"
         "WITH_MESHTOOLS OFF"
-        "WITH_TRADE OFF"
+        "WITH_TRADE ON"
         "WITH_TEXT OFF"
         "WITH_TEXTURETOOLS OFF"
 )
+
+add_definitions(-DIMGUI_DISABLE_OBSOLETE_KEYIO)
+
     
 CPMAddPackage(
     NAME imgui
     GITHUB_REPOSITORY ocornut/imgui
-    GIT_TAG 9aae45eb4a05a5a1f96be1ef37eb503a12ceb889
+    GIT_TAG aceab9a877de0258d19d29a5d87a51b63a8999bf
     EXCLUDE_FROM_ALL YES
 )
 # Set dir for find_package(ImGui)
@@ -51,18 +54,29 @@ set(IMGUI_DIR ${imgui_SOURCE_DIR})
 CPMAddPackage(
     NAME magnum-integration
     GITHUB_REPOSITORY mosra/magnum-integration
-    GIT_TAG 6fa1a7754bf8bc612befdc9ec543f8420a0111cc
+    GIT_TAG a6c469de651032746a965c5aa83c243ca6a097a6
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
         "BUILD_STATIC ON"
         "WITH_IMGUI ON"
 )
-  
+
+CPMAddPackage(
+    NAME magnum-plugins
+    GITHUB_REPOSITORY mosra/magnum-plugins
+    GIT_TAG b0f2818b781eb0fb6a8a76095a6529fc85d442f3
+    GIT_SUBMODULES "src"
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "BUILD_STATIC ON"
+        "WITH_STBIMAGEIMPORTER ON"
+)
+
 CPMAddPackage(
     NAME imnodes
     GITHUB_REPOSITORY Auburn/imnodes
-    GIT_TAG d88f99125bb72cdb71b4c27ff6eb7f318d89a4c5
+    GIT_TAG 277fdd7a912e622a2476981fea14c68abcb6b3c8
     GIT_SUBMODULES ".github"
     EXCLUDE_FROM_ALL YES
     DOWNLOAD_ONLY YES
@@ -78,7 +92,7 @@ CPMAddPackage(
 # Use modules from magnum-integration since it has everything we need
 set(CMAKE_MODULE_PATH "${magnum-integration_SOURCE_DIR}/modules" ${CMAKE_MODULE_PATH})
 
-find_package(Magnum REQUIRED GL GlfwApplication)
+find_package(Magnum REQUIRED GL GlfwApplication Trade)
 find_package(MagnumIntegration REQUIRED ImGui)
 find_package(ImGui REQUIRED SourcesMiscCpp)
 
@@ -115,6 +129,7 @@ target_link_libraries(NoiseTool PRIVATE
     Magnum::Application
     Magnum::Shaders
     Magnum::SceneGraph
+    Magnum::Trade
     MagnumIntegration::ImGui
     ImGui::SourcesMiscCpp
     robin_hood

@@ -1,36 +1,34 @@
 #include <algorithm>
 #include <cmath>
 
-#include <imgui.h>
 #include <Corrade/Utility/Resource.h>
-#include <Magnum/ImGuiIntegration/Context.hpp>
-#include <Magnum/Math/Matrix4.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
 #include <Magnum/GL/Renderer.h>
+#include <Magnum/ImGuiIntegration/Context.hpp>
+#include <Magnum/Math/Matrix4.h>
+#include <imgui.h>
 
-#include "NoiseToolApp.h"
 #include "ImGuiExtra.h"
+#include "NoiseToolApp.h"
 
 using namespace Magnum;
 
-void InitResources()
-{
+void InitResources() {
 #ifdef MAGNUM_BUILD_STATIC
     CORRADE_RESOURCE_INITIALIZE( NoiseTool_RESOURCES )
 #endif
 }
 
 NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
-    Platform::Application{ arguments,
-    Configuration{}
-    .setTitle( "FastNoise2 NoiseTool" )
-    .setSize( Vector2i( 1280, 720 ) )
-    .setWindowFlags( Configuration::WindowFlag::Resizable | Configuration::WindowFlag::Maximized ),
-    GLConfiguration{}
-    .setSampleCount( 4 )
-    },
-    mImGuiIntegrationContext{ NoCreate },
-    mImGuiContext{ ImGui::CreateContext() }
+    Platform::Application { arguments,
+                            Configuration {}
+                                .setTitle( "FastNoise2 NoiseTool" )
+                                .setSize( Vector2i( 1280, 720 ) )
+                                .setWindowFlags( Configuration::WindowFlag::Resizable | Configuration::WindowFlag::Maximized ),
+                            GLConfiguration {}
+                                .setSampleCount( 4 ) },
+    mImGuiIntegrationContext { NoCreate },
+    mImGuiContext { ImGui::CreateContext() }
 {
     InitResources();
 
@@ -40,12 +38,12 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     {
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;
-        const auto font = Utility::Resource{ "NoiseTool" }.getRaw( "Font.ttf" );
+        const auto font                 = Utility::Resource { "NoiseTool" }.getRaw( "Font.ttf" );
         ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( font.data() ), (int)font.size(), 14.0f * framebufferSize().x() / size.x(), &fontConfig );
     }
 
     ImGui::GetIO().IniFilename = "NoiseTool.ini";
-    mImGuiIntegrationContext = ImGuiIntegration::Context( *mImGuiContext, size, windowSize(), framebufferSize() );
+    mImGuiIntegrationContext   = ImGuiIntegration::Context( *mImGuiContext, size, windowSize(), framebufferSize() );
 
     GL::Renderer::enable( GL::Renderer::Feature::DepthTest );
 
@@ -62,7 +60,7 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     GL::Renderer::setBlendEquation( GL::Renderer::BlendEquation::Add, GL::Renderer::BlendEquation::Add );
     GL::Renderer::setBlendFunction( GL::Renderer::BlendFunction::SourceAlpha, GL::Renderer::BlendFunction::OneMinusSourceAlpha );
 
-    Debug{} << "FastSIMD detected max CPU SIMD Level:" << FastNoiseNodeEditor::GetSIMDLevelName( FastSIMD::CPUMaxSIMDLevel() );
+    Debug {} << "FastSIMD detected max CPU SIMD Level:" << FastNoiseNodeEditor::GetSIMDLevelName( FastSIMD::CPUMaxSIMDLevel() );
 
     mLevelNames = { "Auto" };
     mLevelEnums = { FastSIMD::Level_Null };
@@ -112,11 +110,11 @@ void NoiseToolApp::drawEvent()
         ImGui::Checkbox( "Backface Culling", &mBackFaceCulling );
 
         ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)",
-            1000.0 / Double( ImGui::GetIO().Framerate ), Double( ImGui::GetIO().Framerate ) );
+                     1000.0 / Double( ImGui::GetIO().Framerate ), Double( ImGui::GetIO().Framerate ) );
 
         if( ImGui::Combo( "Max SIMD Level", &mMaxSIMDLevel, mLevelNames.data(), (int)mLevelEnums.size() ) ||
             ImGuiExtra::ScrollCombo( &mMaxSIMDLevel, (int)mLevelEnums.size() ) )
-        {   
+        {
             FastSIMD::eLevel newLevel = mLevelEnums[mMaxSIMDLevel];
             mNodeEditor.SetSIMDLevel( newLevel );
         }
@@ -155,7 +153,7 @@ void NoiseToolApp::drawEvent()
 
     cameraVelocity *= mFrameTime.previousFrameDuration() * 80.0f;
 
-    if( !cameraVelocity.isZero() ) 
+    if( !cameraVelocity.isZero() )
     {
         Matrix4 transform = mCameraObject.transformation();
         transform.translation() += transform.rotation() * cameraVelocity;
@@ -284,7 +282,8 @@ void NoiseToolApp::mouseReleaseEvent( MouseEvent& event )
     event.setAccepted();
 }
 
-void NoiseToolApp::mouseScrollEvent( MouseScrollEvent& event ) {
+void NoiseToolApp::mouseScrollEvent( MouseScrollEvent& event )
+{
     if( mImGuiIntegrationContext.handleMouseScrollEvent( event ) )
     {
         /* Prevent scrolling the page */
@@ -297,19 +296,19 @@ void NoiseToolApp::mouseMoveEvent( MouseMoveEvent& event )
 {
     if( mImGuiIntegrationContext.handleMouseMoveEvent( event ) )
         return;
-    if( !(event.buttons() & MouseMoveEvent::Button::Left) )
+    if( !( event.buttons() & MouseMoveEvent::Button::Left ) )
         return;
 
     constexpr float mouseSensitivity = 0.22f;
-    Vector2 angleDelta = Vector2( event.relativePosition() ) * mouseSensitivity;
+    Vector2         angleDelta       = Vector2( event.relativePosition() ) * mouseSensitivity;
 
-    if( !angleDelta.isZero() ) 
-    {    
+    if( !angleDelta.isZero() )
+    {
         mLookAngle.x() = std::fmod( mLookAngle.x() - angleDelta.x(), 360.0f );
         mLookAngle.y() = std::clamp( mLookAngle.y() - angleDelta.y(), -89.f, 89.f );
 
         const Vector3 translation = mCameraObject.transformation().translation();
-        const Matrix4 rotation = Matrix4::rotationY( Deg{ mLookAngle.x() } ) * Matrix4::rotationX( Deg{ mLookAngle.y() } );
+        const Matrix4 rotation    = Matrix4::rotationY( Deg { mLookAngle.x() } ) * Matrix4::rotationX( Deg { mLookAngle.y() } );
 
         mCameraObject.setTransformation( Matrix4::lookAt( translation, translation - rotation.rotationNormalized() * Vector3::zAxis(), Vector3::yAxis() ) );
     }
@@ -325,7 +324,7 @@ void NoiseToolApp::textInputEvent( TextInputEvent& event )
 
 void NoiseToolApp::UpdatePespectiveProjection()
 {
-    mCamera.setProjectionMatrix( Matrix4::perspectiveProjection( Deg( 70.0f ), Vector2{ windowSize() }.aspectRatio(), 2.0f, 3500.0f ) );
+    mCamera.setProjectionMatrix( Matrix4::perspectiveProjection( Deg( 70.0f ), Vector2 { windowSize() }.aspectRatio(), 2.0f, 3500.0f ) );
 }
 
 
