@@ -38,10 +38,7 @@ CPMAddPackage(
         "WITH_TEXT OFF"
         "WITH_TEXTURETOOLS OFF"
 )
-
-add_definitions(-DIMGUI_DISABLE_OBSOLETE_KEYIO)
-
-    
+   
 CPMAddPackage(
     NAME imgui
     GITHUB_REPOSITORY ocornut/imgui
@@ -134,7 +131,7 @@ target_link_libraries(NoiseTool PRIVATE
     ImGui::SourcesMiscCpp
     robin_hood
 )
-
+add_dependencies(NoiseTool MagnumPlugins::StbImageImporter)
 # Windows HiDPI support
 if(CORRADE_TARGET_WINDOWS)
     target_sources(NoiseTool PRIVATE WindowsHiDPI.manifest)

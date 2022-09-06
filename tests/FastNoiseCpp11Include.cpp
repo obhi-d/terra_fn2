@@ -1,10 +1,11 @@
-#include <FastNoise/FastNoise.h>
-#include <FastNoise/Metadata.h>
+//#include <FastNoise/FastNoise.h>
+//#include <FastNoise/Metadata.h>
 
 #include <iostream>
 
 int main()
 {
+    /*
     auto node = FastNoise::New<FastNoise::FractalFBm>();
 
     std::cout << node->GetSIMDLevel() << std::endl;
@@ -46,4 +47,6 @@ int main()
         std::cout << ( simplex ? "valid" : "nullptr" ) << std::endl;
     }
 #endif
+*/
+    return 0;
 }

@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <random>
 #include <sstream>
+#include <string_view>
 
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
@@ -304,6 +305,10 @@ void FastNoiseNodeEditor::Node::SerialiseIncludingDependancies( ImGuiSettingsHan
     {
         buffer->appendf( "hybrid=%i:%f\n", hybrid.first ? editor.mNodes.at( hybrid.first ).nodeId : 0, hybrid.second );
     }
+    for( const auto& image: data->images )
+    {
+        buffer->appendf( "image=<<%s>>\n", image.sourceName.c_str() );
+    }
 
     // id must be after setting all members, it verifies and creates the node
     buffer->appendf( "id=%i\n", nodeId );
@@ -358,6 +363,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
                 nodeData->nodeLookups.clear();
                 nodeData->variables.clear();
                 nodeData->hybrids.clear();
+                nodeData->images.clear();
                 return nodeData;
             }
         }
@@ -368,9 +374,11 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         auto* nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
         auto* nodeData   = (FastNoise::NodeData*)entry;
 
-        ImVec2 imVec2;
-        float  f;
-        int    i;
+        ImVec2      imVec2;
+        float       f;
+        int         i;
+        std::string image;
+
         if( sscanf( line, "grid_pos=%f:%f", &imVec2.x, &imVec2.y ) == 2 )
         {
             auto find = nodeEditor->mNodes.find( nodeData );
@@ -400,7 +408,8 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             // Check the data is valid (node class may have changed)
             if( nodeData->variables.size() == nodeData->metadata->memberVariables.size() &&
                 nodeData->nodeLookups.size() == nodeData->metadata->memberNodeLookups.size() &&
-                nodeData->hybrids.size() == nodeData->metadata->memberHybrids.size() )
+                nodeData->hybrids.size() == nodeData->metadata->memberHybrids.size() &&
+                nodeData->images.size() == nodeData->metadata->memberImages.size() )
             {
                 if( !nodeEditor->FindNodeFromId( i ) && nodeEditor->mNodes.try_emplace( nodeData, *nodeEditor, nodeData, true, i ).second )
                 {
@@ -409,6 +418,23 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             }
 
             delete nodeData;
+        }
+        else
+        {
+            std::string_view l( line );
+            if( l.starts_with( "image=<<" ) )
+            {
+                auto p = l.find( ">>", sizeof( "image=<<" ) - 1 );
+                if( l.npos != p )
+                {
+                    FastNoise::ImageData image;
+                    image.sourceName = l.substr( sizeof( "image=<<" ) - 1, p - sizeof( "image=<<" ) + 1 );
+                    image.fromFile();
+                    nodeData->images.emplace_back( std::move( image ) );
+                }
+                else
+                    nodeData->images.emplace_back();
+            }
         }
     };
 
@@ -1065,7 +1091,7 @@ void FastNoiseNodeEditor::DoNodes()
                     ImGui::Text( "Img: %s", nodeData->images[i].sourceName.c_str() );
             }
 
-            if( ImGuiFileDialog::Instance()->Display( "ChooseFileDlgKey", 32, ImVec2 { 256.0f, 80.f } ) )
+            if( ImGuiFileDialog::Instance()->Display( "ChooseFileDlgKey", 32, ImVec2 { 600, 400 } ) )
             {
                 if( ImGuiFileDialog::Instance()->IsOk() )
                 {

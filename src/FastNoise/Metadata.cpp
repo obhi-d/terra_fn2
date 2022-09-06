@@ -53,10 +53,7 @@ void AddToDataStream( std::vector<uint8_t>& dataStream, T value )
 
 void AddToDataStream( std::vector<uint8_t>& dataStream, ImageData const& img )
 {
-    auto size = img.size();
-    AddToDataStream( dataStream, img.width );
-    AddToDataStream( dataStream, img.height );
-    AddToDataStream( dataStream, img.pixelWidth );
+    auto size    = img.size();
     bool hasData = size > 0 && !img.sourceName.empty();
     AddToDataStream( dataStream, hasData );
     if( hasData )
@@ -67,8 +64,7 @@ void AddToDataStream( std::vector<uint8_t>& dataStream, ImageData const& img )
 
         std::filesystem::path imgPath = img.sourceName;
         imgPath.replace_extension( std::filesystem::path( ".raw" ) );
-        std::basic_ofstream<std::uint8_t> ifs( imgPath, std::ios::binary );
-        ifs.write( img.data.get(), img.width * img.height * img.pixelWidth );
+        img.toFile( imgPath );
     }
 }
 
@@ -232,9 +228,6 @@ bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, T& 
 bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, ImageData& img )
 {
     bool hasData = false;
-    GetFromDataStream( dataStream, idx, img.width );
-    GetFromDataStream( dataStream, idx, img.height );
-    GetFromDataStream( dataStream, idx, img.pixelWidth );
     GetFromDataStream( dataStream, idx, hasData );
 
     if( hasData )
@@ -243,14 +236,8 @@ bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, Ima
         for( ; idx < dataStream.size() && dataStream[idx]; ++idx )
             value += (char)dataStream[idx];
 
-        auto size = img.width * img.height * img.pixelWidth;
-
-        std::filesystem::path imgPath = value;
-        imgPath.replace_extension( ".raw" );
-        auto fileSize = std::filesystem::file_size( imgPath );
-        img.data      = std::shared_ptr<std::uint8_t>( (std::uint8_t*)FastNoise::AlignedAllocate( 32, fileSize ), AlignedByteDeleter {} );
-        std::basic_ifstream<std::uint8_t> ifs( imgPath, std::ios::binary );
-        ifs.read( img.data.get(), fileSize );
+        img.sourceName = value;
+        return img.fromFile();
     }
 
     return true;

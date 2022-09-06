@@ -37,8 +37,8 @@ public:
         Float4         recipAbsSize = {};
         Float4         absOffset    = {};
         Context const& ctx;
-        float          freq = {};
-
+        float          freq           = {};
+        bool           singlePlaneInp = false;
 
         Uniform( Uniform const& ) = default;
         Uniform( Context const& vctx ) :
@@ -48,11 +48,13 @@ public:
 
         void ComputeDerived( uint N )
         {
+            singlePlaneInp = true;
             for( uint i = 0; i < N; ++i )
             {
                 recipSize[i]    = 1.0f / size[i];
                 recipAbsSize[i] = 1.0f / absSize[i];
                 center[i]       = absOffset[i] + ( absSize[i] * 0.5f );
+                singlePlaneInp &= ctx.totalPlanes[i] == 1;
             }
         }
     };
@@ -420,10 +422,7 @@ public:
         using BlockTy  = BlockInput<2>;
         auto   uniform = Uniform( context );
         Params params;
-        params.seed     = int32v( seed );
-        uniform.freq    = frequency;
-        uniform.size[0] = (float)xSize * frequency;
-        uniform.size[1] = (float)ySize * frequency;
+        params.seed = int32v( seed );
 
         uniform.ComputeDerived( 2 );
 
@@ -444,6 +443,12 @@ public:
         float32v yFreq   = float32v( frequency * ySizePi );
         float32v xMul    = float32v( 1 / xSizePi );
         float32v yMul    = float32v( 1 / ySizePi );
+
+        uniform.freq         = frequency;
+        uniform.absOffset[0] = frequency * xSizePi;
+        uniform.absOffset[1] = frequency * ySizePi;
+        uniform.size[0]      = (float)xSize * frequency;
+        uniform.size[1]      = (float)ySize * frequency;
 
         xIdx += int32v::FS_Incremented();
         AxisReset<true>( xIdx, yIdx, xMax, xSizeV, xSize );

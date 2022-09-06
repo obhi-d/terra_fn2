@@ -471,24 +471,24 @@ class FS_T<FastNoise::StrataScaleMask, FS> : public virtual FastNoise::StrataSca
         {
             auto fullX  = float32v( u.recipAbsSize[0] );
             auto fullY  = float32v( u.recipAbsSize[1] );
-            auto halfX  = float32v( u.absSize[0] * 0.5f );
-            auto halfY  = float32v( u.absSize[1] * 0.5f );
+            auto offX   = float32v( u.absOffset[0] );
+            auto offY   = float32v( u.absOffset[1] );
             auto minS   = float32v( mMinScale );
             auto rangeS = float32v( mMaxScale - mMinScale );
             this->GetSourceValue( mSource, params, u, i, o );
             for( uint b = 0; b < BlockSize; ++b )
             {
-                auto     vecU = ( i.v[b][0] + halfX ) * fullX;
-                auto     vecV = ( i.v[b][1] + halfY ) * fullY;
+                auto     vecU = ( i.v[b][0] - offX ) * fullX;
+                auto     vecV = ( i.v[b][1] - offY ) * fullY;
                 float32v sample;
                 // we cannot vector sample the image so fill up a vector
                 {
-                    float* u = (float*)&vecU;
-                    float* v = (float*)&vecV;
-                    float* d = (float*)&sample;
+                    float* fu = (float*)&vecU;
+                    float* fv = (float*)&vecV;
+                    float* fd = (float*)&sample;
                     for( uint p = 0; p < FS_Size_32(); ++p )
                     {
-                        d[p] = mImage.sample( u[p], v[p] );
+                        fd[p] = mImage.sample( fu[p], fv[p] );
                     }
                 }
                 o.output[b] = ( ( sample * rangeS ) + minS ) * o.output[b];

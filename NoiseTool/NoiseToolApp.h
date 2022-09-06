@@ -22,6 +22,8 @@ namespace Magnum
         void drawEvent() override;
         void viewportEvent( ViewportEvent& event ) override;
 
+        bool handleKeyEvent( KeyEvent::Key, bool );
+
         void keyPressEvent( KeyEvent& event ) override;
         void keyReleaseEvent( KeyEvent& event ) override;
         void mousePressEvent( MouseEvent& event ) override;

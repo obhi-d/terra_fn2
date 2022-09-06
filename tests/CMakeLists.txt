@@ -1,3 +1,5 @@
+set(CMAKE_CXX_STANDARD 17)
+
 CPMAddPackage(
     NAME benchmark
     GITHUB_REPOSITORY google/benchmark

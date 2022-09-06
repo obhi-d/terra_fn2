@@ -1,6 +1,8 @@
 #pragma once
 #include <array>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <memory>
 #include <string>
@@ -40,11 +42,48 @@ namespace FastNoise
         std::uint32_t                 depth      = 1;
         std::uint32_t                 pixelWidth = 4;
         Format                        format     = Format::ERGBA;
+        bool                          fromFile( std::filesystem::path path )
+        {
+            std::basic_ifstream<std::uint8_t> ifs( path, std::ios::binary );
+            // TODO serialize with endianness
+            ifs.read( (std::uint8_t*)&width, sizeof( width ) );
+            ifs.read( (std::uint8_t*)&height, sizeof( height ) );
+            ifs.read( (std::uint8_t*)&depth, sizeof( depth ) );
+            ifs.read( (std::uint8_t*)&pixelWidth, sizeof( pixelWidth ) );
+            ifs.read( (std::uint8_t*)&format, sizeof( format ) );
+            auto siz = width * height * depth * pixelWidth;
+            if( !( *this )( nullptr ) )
+                return false;
+            ifs.read( data.get(), siz );
+            return true;
+        }
 
-        void operator()( std::nullptr_t )
+        inline bool fromFile()
+        {
+            std::filesystem::path imgPath = sourceName;
+            imgPath.replace_extension( ".raw" );
+            return fromFile( imgPath );
+        }
+
+        inline void toFile( std::filesystem::path path ) const
+        {
+            std::basic_ofstream<std::uint8_t> ifs( path, std::ios::binary );
+            // TODO serialize with endianness
+            ifs.write( (std::uint8_t*)&width, sizeof( width ) );
+            ifs.write( (std::uint8_t*)&height, sizeof( height ) );
+            ifs.write( (std::uint8_t*)&depth, sizeof( depth ) );
+            ifs.write( (std::uint8_t*)&pixelWidth, sizeof( pixelWidth ) );
+            ifs.write( (std::uint8_t*)&format, sizeof( format ) );
+            ifs.write( data.get(), width * height * pixelWidth );
+        }
+
+        inline bool operator()( std::nullptr_t )
         {
             auto siz = width * height * depth * pixelWidth;
-            data     = std::shared_ptr<std::uint8_t>( (std::uint8_t*)AlignedAllocate( 32, siz * 4 ), AlignedByteDeleter {} );
+            if( !siz )
+                return false;
+            data = std::shared_ptr<std::uint8_t>( (std::uint8_t*)AlignedAllocate( 32, siz * 4 ), AlignedByteDeleter {} );
+            return true;
         }
 
         inline bool operator==( ImageData const& other ) const
@@ -76,8 +115,8 @@ namespace FastNoise
 
         float sample( float u, float v ) const
         {
-            auto x = ( std::uint32_t )( u * ( (float)width + 0.5f ) );
-            auto y = ( std::uint32_t )( v * ( (float)height + 0.5f ) );
+            auto x = std::max<int>( 0, std::min<int>( (int)( u * ( (float)width - 0.5f ) ), width - 1 ) );
+            auto y = std::max<int>( 0, std::min<int>( (int)( v * ( (float)height - 0.5f ) ), height - 1 ) );
             switch( format )
             {
             case Format::EByte:

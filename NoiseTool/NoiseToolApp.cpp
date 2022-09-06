@@ -42,8 +42,10 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
         ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( font.data() ), (int)font.size(), 14.0f * framebufferSize().x() / size.x(), &fontConfig );
     }
 
-    ImGui::GetIO().IniFilename = "NoiseTool.ini";
-    mImGuiIntegrationContext   = ImGuiIntegration::Context( *mImGuiContext, size, windowSize(), framebufferSize() );
+    auto& io                 = ImGui::GetIO();
+    io.IniFilename           = "NoiseTool.ini";
+    mImGuiIntegrationContext = ImGuiIntegration::Context( *mImGuiContext, size, windowSize(), framebufferSize() );
+    std::memset( io.KeyMap, -1, sizeof( io.KeyMap ) );
 
     GL::Renderer::enable( GL::Renderer::Feature::DepthTest );
 
@@ -188,6 +190,102 @@ void NoiseToolApp::drawEvent()
     mFrameTime.nextFrame();
 }
 
+bool NoiseToolApp::handleKeyEvent( KeyEvent::Key key, bool value )
+{
+    ImGui::SetCurrentContext( mImGuiIntegrationContext.context() );
+
+    ImGuiIO& io = ImGui::GetIO();
+
+    switch( key )
+    {
+    /* LCOV_EXCL_START */
+    case KeyEvent::Key::LeftShift:
+    case KeyEvent::Key::RightShift:
+        io.KeyShift = value;
+        break;
+    case KeyEvent::Key::LeftCtrl:
+    case KeyEvent::Key::RightCtrl:
+        io.KeyCtrl = value;
+        break;
+    case KeyEvent::Key::LeftAlt:
+    case KeyEvent::Key::RightAlt:
+        io.KeyAlt = value;
+        break;
+    case KeyEvent::Key::LeftSuper:
+    case KeyEvent::Key::RightSuper:
+        io.KeySuper = value;
+        break;
+    case KeyEvent::Key::Tab:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Tab, value );
+        break;
+    case KeyEvent::Key::Up:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_UpArrow, value );
+        break;
+    case KeyEvent::Key::Down:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_DownArrow, value );
+        break;
+    case KeyEvent::Key::Left:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_LeftArrow, value );
+        break;
+    case KeyEvent::Key::Right:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_RightArrow, value );
+        break;
+    case KeyEvent::Key::Home:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Home, value );
+        break;
+    case KeyEvent::Key::End:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_End, value );
+        break;
+    case KeyEvent::Key::PageUp:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_PageUp, value );
+        break;
+    case KeyEvent::Key::PageDown:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_PageDown, value );
+        break;
+    case KeyEvent::Key::Enter:
+    case KeyEvent::Key::NumEnter:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Enter, value );
+        break;
+    case KeyEvent::Key::Esc:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Escape, value );
+        break;
+    case KeyEvent::Key::Space:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Space, value );
+        break;
+    case KeyEvent::Key::Backspace:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Backspace, value );
+        break;
+    case KeyEvent::Key::Delete:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Delete, value );
+        break;
+    case KeyEvent::Key::A:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_A, value );
+        break;
+    case KeyEvent::Key::C:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_C, value );
+        break;
+    case KeyEvent::Key::V:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_V, value );
+        break;
+    case KeyEvent::Key::X:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_X, value );
+        break;
+    case KeyEvent::Key::Y:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Y, value );
+        break;
+    case KeyEvent::Key::Z:
+        ImGui::GetIO().AddKeyEvent( ImGuiKey_Z, value );
+        break;
+    /* LCOV_EXCL_STOP */
+
+    /* Unknown key, do nothing */
+    default:
+        return false;
+    }
+
+    return io.WantCaptureKeyboard;
+}
+
 void NoiseToolApp::viewportEvent( ViewportEvent& event )
 {
     GL::defaultFramebuffer.setViewport( { {}, event.framebufferSize() } );
@@ -199,7 +297,7 @@ void NoiseToolApp::viewportEvent( ViewportEvent& event )
 
 void NoiseToolApp::keyPressEvent( KeyEvent& event )
 {
-    if( mImGuiIntegrationContext.handleKeyPressEvent( event ) )
+    if( handleKeyEvent( event.key(), true ) )
         return;
 
     HandleKeyEvent( event.key(), true );
@@ -207,7 +305,7 @@ void NoiseToolApp::keyPressEvent( KeyEvent& event )
 
 void NoiseToolApp::keyReleaseEvent( KeyEvent& event )
 {
-    if( mImGuiIntegrationContext.handleKeyReleaseEvent( event ) )
+    if( handleKeyEvent( event.key(), false ) )
         return;
 
     HandleKeyEvent( event.key(), false );
