@@ -114,6 +114,7 @@ add_executable(NoiseTool
     "NoiseTexture.cpp"
     "${imnodes_SOURCE_DIR}/imnodes.cpp"
     ${NoiseTool_RESOURCES}
+    "${NoiseTool_RESOURCES_DIR}/icon.rc"
     "ImGuiFileDialog.cpp"
 ) 
 

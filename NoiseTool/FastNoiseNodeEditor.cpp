@@ -17,6 +17,7 @@
 
 #include "DemoNodeTrees.inl"
 #include "FastNoiseNodeEditor.h"
+#include "IconsFontAwesome6.h"
 #include "ImGuiExtra.h"
 #include "ImGuiFileDialog.h"
 #include "ImageImporter.h"
@@ -307,7 +308,7 @@ void FastNoiseNodeEditor::Node::SerialiseIncludingDependancies( ImGuiSettingsHan
     }
     for( const auto& image: data->images )
     {
-        buffer->appendf( "image=<<%s>>\n", image.sourceName.c_str() );
+        buffer->appendf( "image=%d\n", image.index );
     }
 
     // id must be after setting all members, it verifies and creates the node
@@ -374,10 +375,9 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         auto* nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
         auto* nodeData   = (FastNoise::NodeData*)entry;
 
-        ImVec2      imVec2;
-        float       f;
-        int         i;
-        std::string image;
+        ImVec2 imVec2;
+        float  f;
+        int    i;
 
         if( sscanf( line, "grid_pos=%f:%f", &imVec2.x, &imVec2.y ) == 2 )
         {
@@ -396,6 +396,10 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             Node* link = nodeEditor->FindNodeFromId( i );
 
             nodeData->nodeLookups.push_back( link ? link->data.get() : nullptr );
+        }
+        else if( sscanf( line, "image=%d", &i ) == 1 )
+        {
+            nodeData->images.push_back( { i } );
         }
         else if( sscanf( line, "hybrid=%d:%f", &i, &f ) == 2 )
         {
@@ -419,25 +423,64 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
 
             delete nodeData;
         }
-        else
+    };
+
+
+    ImGuiSettingsHandler textureSettings;
+    textureSettings.TypeName   = "NoiseToolTextureMap";
+    textureSettings.TypeHash   = ImHashStr( textureSettings.TypeName );
+    textureSettings.UserData   = this;
+    textureSettings.WriteAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* outBuf ) {
+        auto* nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
+        outBuf->appendf( "\n[%s][Settings]\n", handler->TypeName );
+
+        for( auto& e: FastNoise::ImageData::ImageTable.items )
+            outBuf->appendf( "image=%d!%s\n", e.second, e.first.sourceName.c_str() );
+    };
+    textureSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
+        if( strcmp( name, "Settings" ) == 0 )
         {
-            std::string_view l( line );
-            if( l.starts_with( "image=<<" ) )
+            return handler->UserData;
+        }
+
+        return nullptr;
+    };
+    textureSettings.ReadLineFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line ) {
+        std::string_view l( line );
+        if( l.starts_with( "image=" ) )
+        {
+            l      = l.substr( sizeof( "image=" ) - 1 );
+            auto n = l.find_first_of( '!' );
+            if( l.npos != n )
             {
-                auto p = l.find( ">>", sizeof( "image=<<" ) - 1 );
-                if( l.npos != p )
+                int  idx    = -1;
+                auto number = l.substr( 0, n );
+                auto path   = l.substr( n + 1 );
+                std::from_chars( number.data(), number.data() + number.size(), idx );
+                if( idx >= 0 )
                 {
-                    FastNoise::ImageData image;
-                    image.sourceName = l.substr( sizeof( "image=<<" ) - 1, p - sizeof( "image=<<" ) + 1 );
-                    image.fromFile();
-                    nodeData->images.emplace_back( std::move( image ) );
+                    int last = (int)FastNoise::ImageData::ImageTable.items.size();
+                    FastNoise::ImageData::ImageTable.items.emplace_back( ImportImage( path ), (int)idx );
+                    if( idx >= (int)FastNoise::ImageData::ImageTable.indexes.size() )
+                    {
+                        FastNoise::ImageData::ImageTable.indexes.resize( idx + 1, -1 );
+                    }
+                    FastNoise::ImageData::ImageTable.indexes[idx] = last;
                 }
-                else
-                    nodeData->images.emplace_back();
             }
         }
     };
-
+    textureSettings.ApplyAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler ) {
+        auto& indexes = FastNoise::ImageData::ImageTable.indexes;
+        for( size_t i = 0; i < indexes.size(); ++i )
+        {
+            if( indexes[i] == -1 ) // free
+            {
+                indexes[i]                            = FastNoise::ImageData::ImageTable.free;
+                FastNoise::ImageData::ImageTable.free = (int)i;
+            }
+        }
+    };
 
     ImGuiSettingsHandler editorSettings;
     editorSettings.TypeName   = "NoiseToolNodeGraph";
@@ -520,6 +563,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
     };
 
     ImGuiExtra::AddOrReplaceSettingsHandler( editorSettings );
+    ImGuiExtra::AddOrReplaceSettingsHandler( textureSettings );
     ImGuiExtra::AddOrReplaceSettingsHandler( nodeSettings );
     ImGuiExtra::AddOrReplaceSettingsHandler( histroySettings );
 }
@@ -689,11 +733,12 @@ void FastNoiseNodeEditor::Draw( const Matrix4& transformation, const Matrix4& pr
     ImGui::End();
 
     DoHistory();
+    DoImages();
     // DoNodeBenchmarks();
 
     mNoiseTexture.Draw( this );
 
-    mMeshNoisePreview.Draw( transformation, projection, cameraPosition );
+    mMeshNoisePreview.Draw( transformation, projection, cameraPosition, mNoiseTexture.GetOffset2D() );
 }
 
 void FastNoiseNodeEditor::CheckLinks()
@@ -838,34 +883,90 @@ void FastNoiseNodeEditor::DoHistory()
 {
     if( ImGui::Begin( "History" ) )
     {
-        if( ImGui::BeginTable( "Entry Name : Encoded Data", 3, ImGuiTableFlags_Borders ) )
+        if( ImGui::BeginTable( "HistoryTable", 2, ImGuiTableFlags_Borders ) )
         {
-            ImGui::TableSetupColumn( "Delete" );
             ImGui::TableSetupColumn( "Name" );
-            ImGui::TableSetupColumn( "Encoded String" );
+            ImGui::TableSetupColumn( "Action" );
             ImGui::TableHeadersRow();
             for( auto& e: mHistory )
             {
+
                 if( e.second.empty() )
                     continue;
                 ImGui::TableNextColumn();
-                if( ImGui::Button( "[DEL]" ) )
+                ImGui::Text( e.first.c_str() );
+                ImGui::TableNextColumn();
+                if( ImGui::Button( ICON_FA_COPY ) )
+                {
+                    ImGui::SetClipboardText( e.second.c_str() );
+                }
+                ImGui::SameLine();
+                if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
                 {
                     e.first  = "";
                     e.second = "";
                     ImGuiExtra::MarkSettingsDirty();
                 }
-                ImGui::TableNextColumn();
-                if( ImGui::Button( e.first.c_str() ) )
-                {
-                    ImGui::SetClipboardText( e.second.c_str() );
-                }
-                ImGui::TableNextColumn();
-                ImGui::Text( e.second.c_str() );
                 ImGui::TableNextRow();
             }
         }
         ImGui::EndTable();
+    }
+    ImGui::End();
+}
+
+
+void FastNoiseNodeEditor::DoImages()
+{
+    if( ImGui::Begin( "Images", 0, ImGuiWindowFlags_AlwaysUseWindowPadding ) )
+    {
+        if( ImGui::BeginTable( "ImageTable", 2, ImGuiTableFlags_Borders ) )
+        {
+            ImGui::TableSetupColumn( "Images" );
+            ImGui::TableSetupColumn( "Action" );
+            ImGui::TableHeadersRow();
+            for( auto& e: FastNoise::ImageData::ImageTable.items )
+            {
+                if( e.first.sourceName.empty() )
+                    continue;
+                ImGui::TableNextColumn();
+                bool selected = e.second == mSelectedImage.index;
+                if( ImGui::Selectable( e.first.sourceName.c_str(), &selected, ImGuiSelectableFlags_SpanAvailWidth | ImGuiSelectableFlags_SelectOnClick ) )
+                {
+                    if( selected )
+                        mSelectedImage.index = e.second;
+                    else if( mSelectedImage.index == e.second )
+                        mSelectedImage.index = -1;
+                }
+                if( selected )
+                    mSelectedImage.index = e.second;
+                ImGui::TableNextColumn();
+                ImGui::PushID( e.second );
+                if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
+                {
+                    if( mSelectedImage.index == e.second )
+                        mSelectedImage.index = -1;
+                    FastNoise::ImageData::ImageTable.Erase( e.second );
+                    ImGuiExtra::MarkSettingsDirty();
+                }
+                ImGui::PopID();
+                ImGui::TableNextRow();
+            }
+        }
+
+        ImGui::EndTable();
+
+        if( ImGui::Button( "Add Image" ) )
+            ImGuiFileDialog::Instance()->OpenDialog( "ImageFileDlgKey", "Images", ".png,.bmp,.tga,.jpeg,.jpg", "." );
+
+
+        if( ImGuiFileDialog::Instance()->Display( "ImageFileDlgKey", 32, ImVec2 { 600, 400 } ) )
+        {
+            if( ImGuiFileDialog::Instance()->IsOk() )
+                mSelectedImage.index = FastNoise::ImageData::ImageTable.Emplace( Magnum::ImportImage( ImGuiFileDialog::Instance()->GetFilePathName() ) );
+
+            ImGuiFileDialog::Instance()->Close();
+        }
     }
     ImGui::End();
 }
@@ -1079,41 +1180,17 @@ void FastNoiseNodeEditor::DoNodes()
             ImNodes::BeginStaticAttribute( 0 );
 
             auto& nodeVar = nodeMetadata->memberImages[i];
-            if( ImGui::Button( "Browse" ) )
+            if( ImGui::Button( ICON_FA_IMAGE ) )
             {
-                ImGuiFileDialog::Instance()->OpenDialog( "ChooseFileDlgKey", nodeVar.name, nodeVar.extensions.c_str(), "." );
+                nodeData->images[i].index = mSelectedImage.index;
+                node.second.GeneratePreview();
             }
+            auto const& image = nodeData->images[i].toImage();
+            ImGui::SameLine();
+            if( !image.sourceName.empty() )
+                ImGui::Text( image.sourceName.c_str() );
             else
-            {
-                if( nodeData->images[i].sourceName.empty() )
-                    ImGui::Text( "Choose an image", nodeData->images[i].sourceName.c_str() );
-                else
-                    ImGui::Text( "Img: %s", nodeData->images[i].sourceName.c_str() );
-            }
-
-            if( ImGuiFileDialog::Instance()->Display( "ChooseFileDlgKey", 32, ImVec2 { 600, 400 } ) )
-            {
-                if( ImGuiFileDialog::Instance()->IsOk() )
-                {
-                    nodeData->images[i] = Magnum::ImportImage( ImGuiFileDialog::Instance()->GetFilePathName() );
-                    if( !nodeData->images[i].data )
-                    {
-                        ImGui::OpenPopup( "ImageError" );
-                        bool open = true;
-                        if( ImGui::BeginPopupModal( "ImageError", &open ) )
-                        {
-                            ImGui::Text( "Image format not supported." );
-                            if( ImGui::Button( "Close" ) )
-                                ImGui::CloseCurrentPopup();
-                            ImGui::EndPopup();
-                        }
-                    }
-                    node.second.GeneratePreview();
-                }
-
-                ImGuiFileDialog::Instance()->Close();
-            }
-
+                ImGui::Text( ICON_FA_LEFT_LONG " use selected image" );
             ImNodes::EndStaticAttribute();
         }
 

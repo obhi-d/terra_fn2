@@ -14,6 +14,7 @@
 #include "FastNoise/FastNoise.h"
 #include "FastNoise/Metadata.h"
 
+#include "FastNoise/ImageData.h"
 #include "MeshNoisePreview.h"
 #include "NoiseTexture.h"
 
@@ -132,6 +133,7 @@ namespace Magnum
         void DoContextMenu();
         void DoNodes();
         void DoHistory();
+        void DoImages();
         void UpdateSelected();
 
 
@@ -160,6 +162,7 @@ namespace Magnum
         FastSIMD::eLevel mMaxSIMDLevel    = FastSIMD::Level_Null;
         FastSIMD::eLevel mActualSIMDLevel = FastSIMD::Level_Null;
 
-        History mHistory;
+        FastNoise::ImageDataView mSelectedImage;
+        History                  mHistory;
     };
 } // namespace Magnum

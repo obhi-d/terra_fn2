@@ -8,8 +8,12 @@
 #include <Magnum/Math/Matrix4.h>
 #include <imgui.h>
 
+#include "IconsFontAwesome6.h"
 #include "ImGuiExtra.h"
 #include "NoiseToolApp.h"
+
+#include "FastNoise/ImageData.h"
+#include "ImageImporter.h"
 
 using namespace Magnum;
 
@@ -37,9 +41,16 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     // Add a font that actually looks acceptable on HiDPI screens.
     {
         ImFontConfig fontConfig;
-        fontConfig.FontDataOwnedByAtlas = false;
-        const auto font                 = Utility::Resource { "NoiseTool" }.getRaw( "Font.ttf" );
+        fontConfig.FontDataOwnedByAtlas    = false;
+        const auto           font          = Utility::Resource { "NoiseTool" }.getRaw( "Font.ttf" );
+        const auto           iconFont      = Utility::Resource { "NoiseTool" }.getRaw( "fontawesome.otf" );
+        static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
         ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( font.data() ), (int)font.size(), 14.0f * framebufferSize().x() / size.x(), &fontConfig );
+        ImFontConfig config;
+        config.FontDataOwnedByAtlas = false;
+        config.MergeMode            = true;
+        config.GlyphMinAdvanceX     = 13.0f;
+        ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( iconFont.data() ), (int)iconFont.size(), 14.0f * framebufferSize().x() / size.x(), &config, icon_ranges );
     }
 
     auto& io                 = ImGui::GetIO();

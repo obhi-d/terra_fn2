@@ -529,15 +529,15 @@ namespace FastNoise
         }
 
         template<typename U>
-        void AddVariableImage( const char* name, const char* extensions, void ( U::*func )( ImageData ) )
+        void AddVariableImage( const char* name, const char* extensions, void ( U::*func )( ImageData const& ) )
         {
             MemberImage member;
             member.name       = name;
             member.extensions = extensions;
-            member.setFunc    = [func]( Generator* g, ImageData s ) {
+            member.setFunc    = [func]( Generator* g, ImageData const& s ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
                 {
-                    ( gRealType->*func )( std::move( s ) );
+                    ( gRealType->*func )( s );
                     return true;
                 }
                 return false;

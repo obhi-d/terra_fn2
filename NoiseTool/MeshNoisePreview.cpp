@@ -46,6 +46,7 @@ MeshNoisePreview::~MeshNoisePreview()
 
 void MeshNoisePreview::ReGenerate( FastNoise::SmartNodeArg<> generator )
 {
+    mRequiresRegen       = true;
     mLoadRange           = 200.0f;
     mBuildData.generator = generator;
     mBuildData.pos       = Vector3i( 0 );
@@ -66,7 +67,7 @@ void MeshNoisePreview::ReGenerate( FastNoise::SmartNodeArg<> generator )
     }
 }
 
-void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition )
+void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition, const Vector2i& offset )
 {
     if( ImGui::Checkbox( "Generate Mesh Preview", &mEnabled ) )
     {
@@ -99,16 +100,22 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
             mTriCount += meshTriCount;
             mMeshesCount++;
 
-            Vector3 posf( chunk.GetPos() );
-            Range3D bbox( posf, posf + Vector3( Chunk::SIZE + 1 ) );
-
-            if( mBuildData.meshType == MeshType_Heightmap2D )
+            bool drawObject = true;
+            if( mBuildData.meshType != MeshType_LimitedHeightmap2D )
             {
-                bbox.min().y() = mMinMax.min * mBuildData.heightmapMultiplier;
-                bbox.max().y() = mMinMax.max * mBuildData.heightmapMultiplier;
-            }
+                Vector3 posf( chunk.GetPos() );
+                Range3D bbox( posf, posf + Vector3( Chunk::SIZE + 1 ) );
 
-            if( Math::Intersection::rangeFrustum( bbox, camFrustum ) )
+                if( mBuildData.meshType == MeshType_Heightmap2D || mBuildData.meshType == MeshType_LimitedHeightmap2D )
+                {
+                    bbox.min().y() = mMinMax.min * mBuildData.heightmapMultiplier;
+                    bbox.max().y() = mMinMax.max * mBuildData.heightmapMultiplier;
+                }
+
+                drawObject = Math::Intersection::rangeFrustum( bbox, camFrustum );
+            }
+            // always draw
+            if( drawObject )
             {
                 drawnTriCount += meshTriCount;
                 mShader.draw( *mesh );
@@ -129,8 +136,14 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
 
     edited |= ImGui::DragInt( "Seed", &mBuildData.seed );
     edited |= ImGui::DragFloat( "Frequency", &mBuildData.frequency, 0.0005f, 0, 0, "%.4f" );
-
-    if( mBuildData.meshType == MeshType_Heightmap2D )
+    if( mBuildData.meshType == MeshType_LimitedHeightmap2D )
+    {
+        edited |= ImGui::DragInt( "Planes X", &mBuildData.heightmapPlanes[0] );
+        edited |= ImGui::DragInt( "Planes Y", &mBuildData.heightmapPlanes[1] );
+        edited |= ImGui::DragInt( "Size X", &mBuildData.heightmapSize[0] );
+        edited |= ImGui::DragInt( "Size Y", &mBuildData.heightmapSize[1] );
+    }
+    if( mBuildData.meshType == MeshType_Heightmap2D || mBuildData.meshType == MeshType_LimitedHeightmap2D )
     {
         edited |= ImGui::DragFloat( "Heightmap Multiplier", &mBuildData.heightmapMultiplier, 0.5f );
     }
@@ -139,6 +152,8 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
         edited |= ImGui::DragFloat( "Iso Surface", &mBuildData.isoSurface, 0.02f );
     }
 
+    edited |= ( mBuildData.meshType == MeshType_LimitedHeightmap2D ) && offset != mBuildData.offset;
+    mBuildData.offset = offset;
     if( edited )
     {
         ReGenerate( mBuildData.generator );
@@ -161,19 +176,33 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
     ImGui::Text( "Chunk Load Range: %0.1f", mLoadRange );
     ImGui::Text( "Generated Min (%0.6f) : Max (%0.6f)", mMinMax.min, mMinMax.max );
 
-    if( mBuildData.meshType != MeshType_Heightmap2D )
+    if( mBuildData.meshType != MeshType_Heightmap2D && mBuildData.meshType != MeshType_LimitedHeightmap2D )
     {
         ImGui::Text( "Min Air Y (%0.1f) : Max Solid Y (%0.1f)", mMinAirY, mMaxSolidY );
     }
 
     ImGui::Text( "Camera Pos: %0.1f, %0.1f, %0.1f", cameraPosition.x(), cameraPosition.y(), cameraPosition.z() );
 
-    UpdateChunksForPosition( cameraPosition );
+    if( mBuildData.meshType != MeshType_LimitedHeightmap2D )
+        UpdateChunksForPosition( cameraPosition );
+    else
+        CreateChunksForStaticHeightMap( mRequiresRegen && mEnabled );
+    mRequiresRegen = false;
 }
 
 float MeshNoisePreview::GetLoadRangeModifier()
 {
     return std::min( 0.01f, (float)( 1000 / std::pow( std::min( 1000.0f, mLoadRange ), 1.5 ) ) );
+}
+
+void MeshNoisePreview::CreateChunksForStaticHeightMap( bool regen )
+{
+    if( regen )
+    {
+        mBuildData.pos.x() = mBuildData.offset.x();
+        mBuildData.pos.z() = mBuildData.offset.y();
+        mGenerateQueue.Push( mBuildData );
+    }
 }
 
 void MeshNoisePreview::UpdateChunkQueues( const Vector3& position )
@@ -209,6 +238,10 @@ void MeshNoisePreview::UpdateChunkQueues( const Vector3& position )
                [chunkPos]( const Chunk& a, const Chunk& b ) {
                    return ( chunkPos - a.GetPos() ).dot() < ( chunkPos - b.GetPos() ).dot();
                } );
+
+
+    if( mBuildData.meshType == MeshType_LimitedHeightmap2D )
+        return;
 
     // Unload further chunk if out of load range
     size_t deletedChunks = 0;
@@ -267,7 +300,7 @@ void MeshNoisePreview::UpdateChunksForPosition( Vector3 position )
 
         for( int y = -chunkRange; y <= chunkRange; y++ )
         {
-            if( mBuildData.meshType == MeshType_Heightmap2D )
+            if( mBuildData.meshType == MeshType_Heightmap2D || mBuildData.meshType == MeshType_LimitedHeightmap2D )
             {
                 positionI.y() = 0;
                 chunkPos.y()  = 0;
@@ -348,6 +381,9 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildMeshData( const 
 
     case MeshType_Heightmap2D:
         return BuildHeightMap2DMesh( buildData, densityValues, vertexData, indicies );
+
+    case MeshType_LimitedHeightmap2D:
+        return BuildHeightMap2DMesh( buildData, vertexData, indicies );
 
     case MeshType_Count:
         break;
@@ -499,6 +535,80 @@ void MeshNoisePreview::Chunk::AddQuadAO( std::vector<VertexData>& verts, std::ve
     indicies.push_back( vertIdx + 3 );
     indicies.push_back( vertIdx + triRotation );
     indicies.push_back( vertIdx + 1 );
+}
+
+MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData& buildData, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
+{
+
+    int                           sizeX   = std::max( 1, buildData.heightmapSize[0] );
+    int                           sizeY   = std::max( 1, buildData.heightmapSize[1] );
+    int                           nbVertX = sizeX + 1;
+    int                           nbVertY = sizeY + 1;
+    FastNoise::Buffer             density( 32, nbVertX * nbVertY );
+    FastNoise::Generator::Context ctx( density );
+    FastNoise::OutputMinMax       minMax;
+    ctx.totalPlanes[0] = buildData.heightmapPlanes[0];
+    ctx.totalPlanes[1] = buildData.heightmapPlanes[1];
+    for( int py = 0; py < buildData.heightmapPlanes[1]; ++py )
+    {
+        ctx.planeId[1] = py;
+        for( int px = 0; px < buildData.heightmapPlanes[0]; ++px )
+        {
+            auto offset    = buildData.offset + Magnum::Vector2i( px * sizeX, (float)py * sizeY );
+            ctx.planeId[0] = px;
+            buildData.generator->GenUniformGrid2D( ctx,
+                                                   offset.x(), offset.y(),
+                                                   nbVertX, nbVertY, buildData.frequency, buildData.seed );
+            auto densityValues = density.begin();
+
+            minMax << ctx.minMax;
+            int32_t STEP_X = 1;
+            int32_t STEP_Y = nbVertX;
+
+            Vector3 sunLight = LIGHT_DIR.normalized() * ( 1.0f - AMBIENT_LIGHT ) + Vector3( AMBIENT_LIGHT );
+
+            int32_t noiseIdx = 0;
+
+            for( int32_t y = 0; y < buildData.heightmapSize[1]; y++ )
+            {
+                float yf = ( y + offset.y() );
+
+                for( int32_t x = 0; x < buildData.heightmapSize[0]; x++ )
+                {
+                    float xf = x + offset.x();
+
+                    Vector3 v00( xf, densityValues[noiseIdx] * buildData.heightmapMultiplier, yf );
+                    Vector3 v01( xf, densityValues[noiseIdx + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
+                    Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X] * buildData.heightmapMultiplier, yf );
+                    Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
+
+                    // Normal for quad
+                    float light = ( sunLight * ( Math::cross( v10 - v11, v00 - v11 ).normalized() + Math::cross( v01 - v00, v11 - v00 ).normalized() ).normalized() ).dot();
+
+                    uint32_t vertIdx = (uint32_t)vertexData.size();
+                    vertexData.emplace_back( v00, light );
+                    vertexData.emplace_back( v01, light );
+                    vertexData.emplace_back( v10, light );
+                    vertexData.emplace_back( v11, light );
+
+                    // Slice quad along longest split
+                    uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
+                    indicies.push_back( vertIdx );
+                    indicies.push_back( vertIdx + 3 - triRotation );
+                    indicies.push_back( vertIdx + 2 );
+                    indicies.push_back( vertIdx + 3 );
+                    indicies.push_back( vertIdx + triRotation );
+                    indicies.push_back( vertIdx + 1 );
+
+                    noiseIdx++;
+                }
+
+                noiseIdx += STEP_X;
+            }
+        }
+    }
+
+    return MeshData( buildData.pos, minMax, vertexData, indicies );
 }
 
 MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData& buildData, FastNoise::Buffer& density, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
@@ -700,6 +810,8 @@ void MeshNoisePreview::SetupSettingsHandlers()
         outBuf->appendf( "color=%d\n", (int)meshNoisePreview->mBuildData.color.toSrgbInt() );
         outBuf->appendf( "mesh_type=%d\n", (int)meshNoisePreview->mBuildData.meshType );
         outBuf->appendf( "enabled=%d\n", (int)meshNoisePreview->mEnabled );
+        outBuf->appendf( "planes=%d:%d\n", meshNoisePreview->mBuildData.heightmapPlanes[0], meshNoisePreview->mBuildData.heightmapPlanes[1] );
+        outBuf->appendf( "size=%d:%d\n", meshNoisePreview->mBuildData.heightmapSize[0], meshNoisePreview->mBuildData.heightmapSize[1] );
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -718,6 +830,8 @@ void MeshNoisePreview::SetupSettingsHandlers()
         sscanf( line, "heightmap_multiplier=%f", &meshNoisePreview->mBuildData.heightmapMultiplier );
         sscanf( line, "seed=%d", &meshNoisePreview->mBuildData.seed );
         sscanf( line, "mesh_type=%d", (int*)&meshNoisePreview->mBuildData.meshType );
+        sscanf( line, "planes=%d:%d", meshNoisePreview->mBuildData.heightmapPlanes, meshNoisePreview->mBuildData.heightmapPlanes + 1 );
+        sscanf( line, "size=%d:%d", meshNoisePreview->mBuildData.heightmapSize, meshNoisePreview->mBuildData.heightmapSize + 1 );
 
         int i;
         if( sscanf( line, "color=%d", &i ) == 1 )

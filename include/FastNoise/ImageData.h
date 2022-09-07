@@ -6,15 +6,41 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "FastNoise/AllocUtils.h"
 #include "FastNoise/FastNoise_Config.h"
+#include "FastNoise/Serializer.h"
+#include "FastNoise/Table.h"
 
 namespace FastNoise
 {
 
-    struct FASTNOISE_API ImageData
+    class FASTNOISE_API ImageData
     {
+    public:
+        static Table<ImageData> ImageTable;
+
+
+        struct View
+        {
+            std::int32_t index = -1;
+
+            ImageData const& toImage()
+            {
+                return ImageTable.At( index );
+            }
+
+            bool operator==( View const& other ) const noexcept
+            {
+                return index == other.index;
+            }
+            bool operator!=( View const& other ) const noexcept
+            {
+                return index != other.index;
+            }
+        };
+
         enum class Format
         {
             EByte,
@@ -42,31 +68,20 @@ namespace FastNoise
         std::uint32_t                 depth      = 1;
         std::uint32_t                 pixelWidth = 4;
         Format                        format     = Format::ERGBA;
-        bool                          fromFile( std::filesystem::path path )
-        {
-            std::basic_ifstream<std::uint8_t> ifs( path, std::ios::binary );
-            // TODO serialize with endianness
-            ifs.read( (std::uint8_t*)&width, sizeof( width ) );
-            ifs.read( (std::uint8_t*)&height, sizeof( height ) );
-            ifs.read( (std::uint8_t*)&depth, sizeof( depth ) );
-            ifs.read( (std::uint8_t*)&pixelWidth, sizeof( pixelWidth ) );
-            ifs.read( (std::uint8_t*)&format, sizeof( format ) );
-            auto siz = width * height * depth * pixelWidth;
-            if( !( *this )( nullptr ) )
-                return false;
-            ifs.read( data.get(), siz );
-            return true;
-        }
+
 
         inline bool fromFile()
         {
-            std::filesystem::path imgPath = sourceName;
+            std::filesystem::path imgPath = sourceName + ".raw";
             imgPath.replace_extension( ".raw" );
             return fromFile( imgPath );
         }
 
-        inline void toFile( std::filesystem::path path ) const
+        inline void toFile() const
         {
+            std::filesystem::path path = sourceName + ".raw";
+            if( std::filesystem::exists( path ) )
+                return;
             std::basic_ofstream<std::uint8_t> ifs( path, std::ios::binary );
             // TODO serialize with endianness
             ifs.write( (std::uint8_t*)&width, sizeof( width ) );
@@ -119,6 +134,7 @@ namespace FastNoise
             auto y = std::max<int>( 0, std::min<int>( (int)( v * ( (float)height - 0.5f ) ), height - 1 ) );
             switch( format )
             {
+            default:
             case Format::EByte:
                 return (float)get<std::uint8_t>( x, y ) / 255.f;
             case Format::ERGB:
@@ -135,5 +151,66 @@ namespace FastNoise
                 return get<float>( x, y );
             }
         }
+
+        template<int N>
+        float sampleNx( float u, float v ) const
+        {
+            auto            cx    = (int)( u * ( (float)width - 0.5f ) );
+            auto            cy    = (int)( v * ( (float)height - 0.5f ) );
+            float           value = 0;
+            constexpr float recip = 1.f / ( N * N * 4.f );
+
+            for( int sy = -N; sy < N; ++sy )
+            {
+                for( int sx = -N; sx < N; ++sx )
+                {
+                    auto x = std::max<int>( 0, std::min<int>( cx + sx, width - 1 ) );
+                    auto y = std::max<int>( 0, std::min<int>( cy + sy, height - 1 ) );
+                    switch( format )
+                    {
+                    case Format::EByte:
+                        value += (float)get<std::uint8_t>( x, y ) / 255.f;
+                        break;
+                    case Format::ERGB:
+                    {
+                        auto rgb = get<RGB>( x, y );
+                        value += (float)( (std::uint32_t)rgb.value[0] + ( ( (std::uint32_t)rgb.value[1] ) << 8 ) +
+                                          ( ( (std::uint32_t)rgb.value[2] ) << 16 ) ) /
+                            (float)( 1 << 24 );
+                    }
+                    break;
+                    case Format::ERGBA:
+                    case Format::EUInt:
+                        value += (float)( (double)get<std::uint32_t>( x, y ) / (double)std::numeric_limits<std::uint32_t>::max() );
+                        break;
+                    case Format::EFloat:
+                        value += get<float>( x, y );
+                        break;
+                    }
+                }
+            }
+
+            value *= recip;
+            return value;
+        }
+
+    private:
+        bool fromFile( std::filesystem::path path )
+        {
+            std::basic_ifstream<std::uint8_t> ifs( path, std::ios::binary );
+            // TODO serialize with endianness
+            ifs.read( (std::uint8_t*)&width, sizeof( width ) );
+            ifs.read( (std::uint8_t*)&height, sizeof( height ) );
+            ifs.read( (std::uint8_t*)&depth, sizeof( depth ) );
+            ifs.read( (std::uint8_t*)&pixelWidth, sizeof( pixelWidth ) );
+            ifs.read( (std::uint8_t*)&format, sizeof( format ) );
+            auto siz = width * height * depth * pixelWidth;
+            if( !( *this )( nullptr ) )
+                return false;
+            ifs.read( data.get(), siz );
+            return true;
+        }
     };
+
+    using ImageDataView = ImageData::View;
 } // namespace FastNoise

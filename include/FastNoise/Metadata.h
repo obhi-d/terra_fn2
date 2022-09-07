@@ -182,8 +182,8 @@ namespace FastNoise
         // Set a string
         struct MemberImage : Member
         {
-            std::string                                             extensions = ".";
-            std::function<bool( Generator*, FastNoise::ImageData )> setFunc;
+            std::string                                                    extensions = ".";
+            std::function<bool( Generator*, FastNoise::ImageData const& )> setFunc;
         };
 
         uint16_t                 id;
@@ -233,7 +233,7 @@ namespace FastNoise
         std::vector<Metadata::MemberVariable::ValueUnion> variables;
         std::vector<NodeData*>                            nodeLookups;
         std::vector<std::pair<NodeData*, float>>          hybrids;
-        std::vector<FastNoise::ImageData>                 images;
+        std::vector<FastNoise::ImageDataView>             images;
 
         bool operator==( const NodeData& rhs ) const
         {

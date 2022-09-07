@@ -12,7 +12,7 @@
 #pragma warning( disable : 4250 )
 #endif
 
-static inline constexpr bool NoMultiThread = false;
+static inline constexpr bool NoMultiThread = true;
 
 template<typename FS>
 class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator

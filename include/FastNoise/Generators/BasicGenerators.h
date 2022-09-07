@@ -9,7 +9,10 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetValue( float value ) { mValue = value; }
+        void SetValue( float value )
+        {
+            mValue = value;
+        }
 
     protected:
         float mValue = 1.0f;
@@ -55,7 +58,10 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSize( float value ) { mSize = value; }
+        void SetSize( float value )
+        {
+            mSize = value;
+        }
 
     protected:
         float mSize = 1.0f;
@@ -81,7 +87,10 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetScale( float value ) { mScale = value; }
+        void SetScale( float value )
+        {
+            mScale = value;
+        }
 
     protected:
         float mScale = 1.0f;
@@ -108,11 +117,15 @@ namespace FastNoise
         const Metadata& GetMetadata() const override;
 
         template<Dim D>
-        void Set( float multiplier, float offset = 0.0f ) { mMultiplier[(int)D] = multiplier; mOffset[(int)D] = offset; }
+        void Set( float multiplier, float offset = 0.0f )
+        {
+            mMultiplier[(int)D] = multiplier;
+            mOffset[(int)D]     = offset;
+        }
 
     protected:
         PerDimensionVariable<float> mMultiplier = 0.0f;
-        PerDimensionVariable<float> mOffset = 0.0f;
+        PerDimensionVariable<float> mOffset     = 0.0f;
 
         template<typename T>
         friend struct MetadataT;
@@ -139,16 +152,25 @@ namespace FastNoise
         FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
         const Metadata& GetMetadata() const override;
 
-        void SetSource( SmartNodeArg<> gen ) { this->SetSourceMemberVariable( mSource, gen ); }
-        void SetDistanceFunction( DistanceFunction value ) { mDistanceFunction = value; }
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+        void SetDistanceFunction( DistanceFunction value )
+        {
+            mDistanceFunction = value;
+        }
 
         template<Dim D>
-        void SetScale( float value ) { mPoint[(int)D] = value; }
+        void SetScale( float value )
+        {
+            mPoint[(int)D] = value;
+        }
 
     protected:
-        GeneratorSource mSource;
-        DistanceFunction mDistanceFunction = DistanceFunction::EuclideanSquared;
-        PerDimensionVariable<float> mPoint = 0.0f;
+        GeneratorSource             mSource;
+        DistanceFunction            mDistanceFunction = DistanceFunction::EuclideanSquared;
+        PerDimensionVariable<float> mPoint            = 0.0f;
 
         template<typename T>
         friend struct MetadataT;
@@ -168,4 +190,76 @@ namespace FastNoise
         }
     };
 #endif
-}
+
+
+    enum class Sampling
+    {
+        e1x,
+        e2x,
+        e3x,
+        e4x
+    };
+
+    constexpr static const char* kSampling[] = {
+        "x1",
+        "x2",
+        "x3",
+        "x4",
+    };
+
+
+    class StrataMask : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSampling( Sampling sampling )
+        {
+            mSampling = sampling;
+        }
+
+        void SetMinScale( float iLevel )
+        {
+            mMinScale = iLevel;
+        }
+
+        void SetMaxScale( float iLevel )
+        {
+            mMaxScale = iLevel;
+        }
+
+        void SetImage( ImageData const& val )
+        {
+            mImage = &val;
+        }
+
+    protected:
+        float            mMinScale = 0.0f;
+        float            mMaxScale = 1.0f;
+        ImageData const* mImage    = nullptr;
+        Sampling         mSampling = Sampling::e1x;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<StrataMask> : MetadataT<Generator>
+    {
+        MetadataT()
+        {
+            groups.push_back( "Basic Generators" );
+            this->AddVariableEnum( "Sampling", Sampling::e1x, &StrataMask::SetSampling, kSampling );
+            this->AddVariableImage( "StrataSource", ".png,.jpeg,.jpg,.tga,.bmp,.dds,.ktx2", &StrataMask::SetImage );
+            this->AddVariable( "MinScale", -1.0f, &StrataMask::SetMinScale, -1000.0f, 1000.0f );
+            this->AddVariable( "MaxScale", 1.0f, &StrataMask::SetMaxScale, -1000.0f, 1000.0f );
+        }
+
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+    };
+
+#endif
+} // namespace FastNoise

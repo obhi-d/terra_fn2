@@ -728,59 +728,5 @@ namespace FastNoise
 
 #endif
 
-    class StrataScaleMask : public virtual Generator
-    {
-    public:
-        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
-        const Metadata& GetMetadata() const override;
-
-        void SetSource( SmartNodeArg<> gen )
-        {
-            this->SetSourceMemberVariable( mSource, gen );
-        }
-
-        void SetMinScale( float iLevel )
-        {
-            mMinScale = iLevel;
-        }
-
-        void SetMaxScale( float iLevel )
-        {
-            mMaxScale = iLevel;
-        }
-
-        void SetImage( ImageData val )
-        {
-            mImage = val;
-        }
-
-    protected:
-        GeneratorSource mSource;
-        float           mMinScale = 0.0f;
-        float           mMaxScale = 1.0f;
-        ImageData       mImage;
-
-        template<typename T>
-        friend struct MetadataT;
-    };
-
-
-#ifdef FASTNOISE_METADATA
-    template<>
-    struct MetadataT<StrataScaleMask> : MetadataT<Generator>
-    {
-        MetadataT()
-        {
-            groups.push_back( "Modifiers" );
-            this->AddGeneratorSource( "Source", &StrataScaleMask::SetSource );
-            this->AddVariableImage( "StrataSource", ".png,.jpeg,.jpg,.tga,.bmp,.dds,.ktx2", &StrataScaleMask::SetImage );
-            this->AddVariable( "MinScale", -1.0f, &StrataScaleMask::SetMinScale, -1000.0f, 1000.0f );
-            this->AddVariable( "MaxScale", 1.0f, &StrataScaleMask::SetMaxScale, -1000.0f, 1000.0f );
-        }
-
-        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
-    };
-
-#endif
 
 } // namespace FastNoise

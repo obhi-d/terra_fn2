@@ -1,7 +1,10 @@
 
 #pragma once
-#include <Corrade/Containers/Optional.h>
+#include <functional>
+#include <string_view>
+
 #include <Corrade/Containers/Array.h>
+#include <Corrade/Containers/Optional.h>
 #include <Corrade/Containers/StridedArrayView.h>
 
 #include <Magnum/Trade/ImageData.h>
@@ -17,12 +20,12 @@
 namespace Magnum
 {
 
-    inline FastNoise::ImageData ImportImage( std::string file )
+    inline FastNoise::ImageData ImportImage( std::string_view file )
     {
         PluginManager::Manager<Trade::AbstractImporter> manager;
         Containers::Pointer<Trade::AbstractImporter>    importer =
             manager.loadAndInstantiate( "StbImageImporter" );
-        if( !importer || !importer->openFile( file ) )
+        if( !importer || !importer->openFile( std::string { file } ) )
         {
             return FastNoise::ImageData {};
         }
@@ -35,6 +38,7 @@ namespace Magnum
             image.height     = image2D->size().y();
             image.pixelWidth = image2D->pixelSize();
             image.sourceName = file;
+
             switch( image2D->format() )
             {
             case PixelFormat::RGB8Unorm:
@@ -59,6 +63,7 @@ namespace Magnum
             }
             image( std::nullptr_t {} );
             std::memcpy( image.data.get(), image2D->data(), image.size() );
+            std::string_view rep( (const char*)image.data.get(), image.size() );
             return image;
         }
 

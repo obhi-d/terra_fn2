@@ -52,6 +52,11 @@ namespace Magnum
             return mName;
         }
 
+        Vector2i GetOffset2D() const
+        {
+            return Vector2i( (int)mBuildData.offset.x(), (int)mBuildData.offset.y() );
+        }
+
     private:
         struct BuildData
         {

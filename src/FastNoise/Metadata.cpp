@@ -11,12 +11,15 @@
 #include "FastNoise/Metadata.h"
 
 #include "FastNoise/FastNoise.h"
+#include "FastNoise/Serializer.h"
 
 #include "Base64.h"
+
 
 using namespace FastNoise;
 
 std::vector<const Metadata*> Metadata::sAllMetadata;
+Table<ImageData>             ImageData::ImageTable;
 
 NodeData::NodeData( const Metadata* data )
 {
@@ -39,32 +42,6 @@ NodeData::NodeData( const Metadata* data )
         {
             hybrids.emplace_back( nullptr, value.valueDefault );
         }
-    }
-}
-
-template<typename T>
-void AddToDataStream( std::vector<uint8_t>& dataStream, T value )
-{
-    for( size_t i = 0; i < sizeof( T ); i++ )
-    {
-        dataStream.push_back( (uint8_t)( value >> ( i * 8 ) ) );
-    }
-}
-
-void AddToDataStream( std::vector<uint8_t>& dataStream, ImageData const& img )
-{
-    auto size    = img.size();
-    bool hasData = size > 0 && !img.sourceName.empty();
-    AddToDataStream( dataStream, hasData );
-    if( hasData )
-    {
-        auto current = dataStream.size();
-        dataStream.resize( current + img.sourceName.length() + 1 );
-        std::memcpy( &dataStream[current], img.sourceName.c_str(), img.sourceName.length() + 1 );
-
-        std::filesystem::path imgPath = img.sourceName;
-        imgPath.replace_extension( std::filesystem::path( ".raw" ) );
-        img.toFile( imgPath );
     }
 }
 
@@ -191,7 +168,7 @@ bool SerialiseNodeDataInternal( NodeData* nodeData, bool fixUp, std::vector<uint
     {
         if( i >= nodeData->images.size() )
             nodeData->images.resize( i + 1 );
-        AddToDataStream( dataStream, nodeData->images[i] );
+        AddToDataStream( dataStream, nodeData->images[i].index );
     }
 
     referenceIds.emplace( nodeData, (uint16_t)referenceIds.size() );
@@ -209,38 +186,6 @@ std::string Metadata::SerialiseNodeData( NodeData* nodeData, bool fixUp )
         return "";
     }
     return Base64::Encode( serialData );
-}
-
-template<typename T>
-bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, T& value )
-{
-    if( dataStream.size() < idx + sizeof( T ) )
-    {
-        return false;
-    }
-
-    value = *reinterpret_cast<const T*>( dataStream.data() + idx );
-
-    idx += sizeof( T );
-    return true;
-}
-
-bool GetFromDataStream( const std::vector<uint8_t>& dataStream, size_t& idx, ImageData& img )
-{
-    bool hasData = false;
-    GetFromDataStream( dataStream, idx, hasData );
-
-    if( hasData )
-    {
-        std::string value = "";
-        for( ; idx < dataStream.size() && dataStream[idx]; ++idx )
-            value += (char)dataStream[idx];
-
-        img.sourceName = value;
-        return img.fromFile();
-    }
-
-    return true;
 }
 
 SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialisedNodeData, size_t& serialIdx, std::vector<SmartNode<>>& referenceNodes, FastSIMD::eLevel level = FastSIMD::Level_Null )
@@ -340,14 +285,9 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
     // Member file
     for( const auto& var: metadata->memberImages )
     {
-        ImageData f;
-
-        if( !GetFromDataStream( serialisedNodeData, serialIdx, f ) )
-        {
-            return nullptr;
-        }
-
-        var.setFunc( generator.get(), f );
+        ImageDataView f;
+        GetFromDataStream( serialisedNodeData, serialIdx, f.index );
+        var.setFunc( generator.get(), f.toImage() );
     }
 
     referenceNodes.emplace_back( generator );
