@@ -12,8 +12,9 @@ class FS_T<FastNoise::Constant, FS> : public virtual FastNoise::Constant, public
     template<typename Input>
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
-        constexpr auto N     = Input::N;
-        auto           value = float32v( mValue );
+        constexpr auto N         = Input::N;
+        auto           value     = float32v( mValue );
+        auto           BlockSize = i.MaxVectorsInBlock();
         for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = value;
     }
@@ -28,8 +29,9 @@ class FS_T<FastNoise::White, FS> : public virtual FastNoise::White, public FS_T<
     template<typename Input>
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
-        constexpr auto N = Input::N;
-        for( uint b = 0; b < BlockSize; ++b )
+        constexpr auto N         = Input::N;
+        auto           BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             std::array<int32v, N> tmp;
             for( uint n = 0; n < N; ++n )
@@ -50,7 +52,8 @@ class FS_T<FastNoise::Checkerboard, FS> : public virtual FastNoise::Checkerboard
     {
         constexpr auto N          = Input::N;
         float32v       multiplier = FS_Reciprocal_f32( float32v( mSize ) );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto           BlockSize  = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             int32v value = FS_Convertf32_i32( i.v[b][0] * multiplier );
             for( uint n = 1; n < N; ++n )
@@ -71,7 +74,8 @@ class FS_T<FastNoise::SineWave, FS> : public virtual FastNoise::SineWave, public
     {
         constexpr auto N          = Input::N;
         float32v       multiplier = FS_Reciprocal_f32( float32v( mScale ) );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto           BlockSize  = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             float32v value = FS_Sin_f32( i.v[b][0] * multiplier );
             for( uint n = 1; n < N; ++n )
@@ -90,8 +94,9 @@ class FS_T<FastNoise::PositionOutput, FS> : public virtual FastNoise::PositionOu
     template<typename Input>
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
-        constexpr auto N = Input::N;
-        for( uint b = 0; b < BlockSize; ++b )
+        constexpr auto N         = Input::N;
+        auto           BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             o.output[b] = float32v( mOffset[0] ) * float32v( mMultiplier[0] );
             for( uint n = 1; n < N; ++n )
@@ -114,7 +119,8 @@ class FS_T<FastNoise::DistanceToPoint, FS> : public virtual FastNoise::DistanceT
     {
         constexpr auto N = Input::N;
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             std::array<float32v, N> tmp;
             for( uint n = 0; n < N; ++n )
@@ -153,7 +159,8 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
             auto minS   = float32v( mMinScale );
             auto rangeS = float32v( mMaxScale - mMinScale );
 
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 auto     vecU = ( i.v[b][0] - offX ) * fullX;
                 auto     vecV = ( i.v[b][1] - offY ) * fullY;
@@ -165,6 +172,10 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
                     float* fd = (float*)&sample;
                     for( uint p = 0; p < FS_Size_32(); ++p )
                     {
+                        if( fu[p] < 0.0f || fu[p] > 1.0f )
+                        {
+                            throw fu;
+                        }
                         if constexpr( Sampling == FastNoise::Sampling::e1x )
                             fd[p] = mImage->sample( fu[p], fv[p] );
                         else

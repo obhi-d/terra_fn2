@@ -25,7 +25,8 @@ class FS_T<FastNoise::DomainWarpFractalProgressive, FS> : public virtual FastNoi
         this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
         this->GetSourceValue( mGain, params, u, i, Gain );
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             auto& pos = i2.v[b];
 
@@ -87,7 +88,8 @@ class FS_T<FastNoise::DomainWarpFractalIndependant, FS> : public virtual FastNoi
         this->GetSourceValue( warp->GetWarpAmplitude(), params, u, i, o );
         this->GetSourceValue( mWeightedStrength, params, u, i, WeightedStrength );
         this->GetSourceValue( mGain, params, u, i, Gain );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             auto  spos = i.v[b];
             auto& pos  = i2.v[b];

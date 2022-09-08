@@ -12,7 +12,7 @@
 #pragma warning( disable : 4250 )
 #endif
 
-static inline constexpr bool NoMultiThread = true;
+static inline constexpr bool NoMultiThread = false;
 
 template<typename FS>
 class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator
@@ -22,10 +22,10 @@ class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator
 
 
 public:
-    using uint                               = std::uint32_t;
-    using Int4                               = std::array<int, 4>;
-    using Float4                             = std::array<float, 4>;
-    static constexpr std::uint32_t BlockSize = 64;
+    using uint                                     = std::uint32_t;
+    using Int4                                     = std::array<int, 4>;
+    using Float4                                   = std::array<float, 4>;
+    static constexpr std::uint32_t VectorsPerBlock = 64;
 
 
     struct Uniform
@@ -69,7 +69,7 @@ public:
     {
         // MinMax
         using DimVec   = std::array<float32v, DimSize>;
-        using BlockVec = std::array<DimVec, BlockSize>;
+        using BlockVec = std::array<DimVec, VectorsPerBlock>;
 
         static constexpr auto N = DimSize;
 
@@ -124,14 +124,19 @@ public:
 
         void Multiply( float32v scale )
         {
-            for( uint bs = 0; bs < BlockSize; bs++ )
+            for( uint bs = 0; bs < VectorsPerBlock; bs++ )
                 for( uint i = 0; i < N; ++i )
                     v[bs][i] *= scale;
         }
 
-        uint size()
+        uint size() const
         {
             return nbValues;
+        }
+
+        uint MaxVectorsInBlock() const
+        {
+            return ( ( nbValues + FS_Size_32() - 1 ) / FS_Size_32() );
         }
     };
 
@@ -140,21 +145,21 @@ public:
         template<uint N>
         struct HeapBlock
         {
-            float32v output[BlockSize * N];
+            float32v output[VectorsPerBlock * N];
 
             float32v* operator[]( uint i )
             {
-                return output + i * BlockSize;
+                return output + i * VectorsPerBlock;
             }
         };
 
         struct LocalBlock
         {
-            float32v output[BlockSize];
+            float32v output[VectorsPerBlock];
         };
 
 
-        float32v*               output /*[BlockSize]*/ = nullptr;
+        float32v*               output /*[VectorsPerBlock]*/ = nullptr;
         FastNoise::OutputMinMax minMax;
         Output() = default;
 
@@ -179,7 +184,7 @@ public:
 
         void Fill( float32v value )
         {
-            for( uint i = 0; i < BlockSize; ++i )
+            for( uint i = 0; i < VectorsPerBlock; ++i )
                 output[i] = value;
         }
 
@@ -189,7 +194,7 @@ public:
             float32v min( minMax.min );
             float32v max( minMax.max );
 
-            constexpr auto limit    = BlockSize * FS_Size_32();
+            constexpr auto limit    = VectorsPerBlock * FS_Size_32();
             auto           minMaxLt = ( iTotal ) / FS_Size_32();
 
             for( std::uint32_t i = 0; i < minMaxLt; ++i )
@@ -238,19 +243,19 @@ public:
         GenBlockT( p, u, i, o );                                                                                 \
     }
 
-#define FASTNOISE_IMPL_GEN_T                                                                     \
-    using Uniform                            = typename FS_T<FastNoise::Generator, FS>::Uniform; \
-    using Output                             = typename FS_T<FastNoise::Generator, FS>::Output;  \
-    using Params                             = typename FS_T<FastNoise::Generator, FS>::Params;  \
-    using uint                               = typename FS_T<FastNoise::Generator, FS>::uint;    \
-    static constexpr std::uint32_t BlockSize = FS_T<FastNoise::Generator, FS>::BlockSize;        \
-    template<unsigned int D>                                                                     \
-    using BlockInput = typename FS_T<FastNoise::Generator, FS>::template BlockInput<D>;          \
-    using FS_T<FastNoise::Generator, FS>::GetSourceValue;                                        \
-    using FS_T<FastNoise::Generator, FS>::GetSourceSIMD;                                         \
-                                                                                                 \
-    FASTNOISE_IMPL_GEN_T_N( 2 )                                                                  \
-    FASTNOISE_IMPL_GEN_T_N( 3 )                                                                  \
+#define FASTNOISE_IMPL_GEN_T                                                                           \
+    using Uniform                                  = typename FS_T<FastNoise::Generator, FS>::Uniform; \
+    using Output                                   = typename FS_T<FastNoise::Generator, FS>::Output;  \
+    using Params                                   = typename FS_T<FastNoise::Generator, FS>::Params;  \
+    using uint                                     = typename FS_T<FastNoise::Generator, FS>::uint;    \
+    static constexpr std::uint32_t VectorsPerBlock = FS_T<FastNoise::Generator, FS>::VectorsPerBlock;  \
+    template<unsigned int D>                                                                           \
+    using BlockInput = typename FS_T<FastNoise::Generator, FS>::template BlockInput<D>;                \
+    using FS_T<FastNoise::Generator, FS>::GetSourceValue;                                              \
+    using FS_T<FastNoise::Generator, FS>::GetSourceSIMD;                                               \
+                                                                                                       \
+    FASTNOISE_IMPL_GEN_T_N( 2 )                                                                        \
+    FASTNOISE_IMPL_GEN_T_N( 3 )                                                                        \
     FASTNOISE_IMPL_GEN_T_N( 4 )
 
 
@@ -332,9 +337,9 @@ public:
             Size[i] = int32v( size[i] );
             Max[i]  = Size[i] + Idx[i] + int32v( -1 );
 
-            uniform.size[i]      = (float)size[i] * frequency;
-            uniform.absOffset[i] = (float)start[i] * frequency;
-            uniform.absSize[i]   = (float)size[i] * frequency * context.totalPlanes[i];
+            uniform.size[i]      = (float)( size[i] - 1 ) * frequency;
+            uniform.absOffset[i] = (float)context.startOffsetPlane0[i] * frequency;
+            uniform.absSize[i]   = uniform.size[i] * context.totalPlanes[i];
         }
 
         uniform.ComputeDerived( DimSize );
@@ -350,24 +355,24 @@ public:
             }
         }
 
-        auto constexpr ModulatedBlockSize = FS_Size_32() * BlockSize;
-        size_t blockCount                 = ( totalValues + ModulatedBlockSize - 1 ) / ( ModulatedBlockSize );
-        size_t index                      = 0;
+        auto constexpr ModulatedVectorsPerBlock = FS_Size_32() * VectorsPerBlock;
+        size_t blockCount                       = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
+        size_t index                            = 0;
 
         auto                           blocks = std::vector<std::pair<BlockTy, Output>>( blockCount );
         std::vector<std::future<void>> results;
         results.reserve( blockCount - 1 );
-        context.output.resize( alignof( float32v ), blockCount * ModulatedBlockSize );
+        context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
 
         for( size_t b = 0; b < blockCount; ++b )
         {
             auto& block    = blocks[b];
             auto& input    = block.first;
             auto& output   = block.second;
-            output.output  = (float32v*)( context.output.data.get() + b * ModulatedBlockSize );
+            output.output  = (float32v*)( context.output.data.get() + b * ModulatedVectorsPerBlock );
             input.nbValues = 0;
             uint vertBlock = 0;
-            while( index < totalValues && input.nbValues < ModulatedBlockSize )
+            while( index < totalValues && input.nbValues < ModulatedVectorsPerBlock )
             {
                 for( int i = 0; i < DimSize; ++i )
                     input.v[vertBlock][i] = FS_Converti32_f32( Idx[i] ) * freqV;
@@ -447,28 +452,28 @@ public:
         uniform.freq         = frequency;
         uniform.absOffset[0] = frequency * xSizePi;
         uniform.absOffset[1] = frequency * ySizePi;
-        uniform.size[0]      = (float)xSize * frequency;
-        uniform.size[1]      = (float)ySize * frequency;
+        uniform.size[0]      = (float)( xSize - 1 ) * frequency;
+        uniform.size[1]      = (float)( ySize - 1 ) * frequency;
 
         xIdx += int32v::FS_Incremented();
         AxisReset<true>( xIdx, yIdx, xMax, xSizeV, xSize );
 
-        auto constexpr ModulatedBlockSize         = FS_Size_32() * BlockSize;
-        size_t                         blockCount = ( totalValues + ModulatedBlockSize - 1 ) / ( ModulatedBlockSize );
+        auto constexpr ModulatedVectorsPerBlock   = FS_Size_32() * VectorsPerBlock;
+        size_t                         blockCount = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
         auto                           blocks     = std::vector<std::pair<BlockTy, Output>>( blockCount );
         std::vector<std::future<void>> results;
         results.reserve( blockCount - 1 );
-        context.output.resize( alignof( float32v ), blockCount * ModulatedBlockSize );
+        context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
 
         for( size_t b = 0; b < blockCount; ++b )
         {
             auto& block    = blocks[b];
             auto& input    = blocks[b].first;
             auto& output   = blocks[b].second;
-            output.output  = (float32v*)( context.output.data.get() + b * ModulatedBlockSize );
+            output.output  = (float32v*)( context.output.data.get() + b * ModulatedVectorsPerBlock );
             input.nbValues = 0;
             uint vertBlock = 0;
-            while( index < totalValues && input.nbValues < ModulatedBlockSize )
+            while( index < totalValues && input.nbValues < ModulatedVectorsPerBlock )
             {
                 float32v xF = FS_Converti32_f32( xIdx ) * xMul;
                 float32v yF = FS_Converti32_f32( yIdx ) * yMul;

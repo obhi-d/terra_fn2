@@ -19,7 +19,8 @@ class FS_T<FastNoise::Perlin, FS> : public virtual FastNoise::Perlin, public FS_
     template<typename Input, size_t... I>
     FS_INLINE void GenBlockT( int32v seed, Input& i, Output& o, std::index_sequence<I...> ) const
     {
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             o.output[b] = Gen( seed, i.v[b][I]... );
         }

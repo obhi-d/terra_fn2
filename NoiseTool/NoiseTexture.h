@@ -132,7 +132,7 @@ namespace Magnum
         };
 
         template<typename Wrapper>
-        static TextureData BuildTexture( const BuildData& buildData );
+        static TextureData BuildTexture( const BuildData& buildData, Magnum::Vector4 offset );
         static void        BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData, Magnum::Vector4 offset );
         static void        GenerateLoopThread( GenerateQueue<BuildData>& generateQueue, CompleteQueue<TextureData>& completeQueue );
 

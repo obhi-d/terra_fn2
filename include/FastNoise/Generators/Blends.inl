@@ -16,7 +16,8 @@ class FS_T<FastNoise::Add, FS> : public virtual FastNoise::Add, public FS_T<Fast
         Output                      o2( o2b );
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = o.output[b] + o2.output[b];
     }
 };
@@ -35,7 +36,8 @@ class FS_T<FastNoise::Subtract, FS> : public virtual FastNoise::Subtract, public
         Output                      o2( o2b );
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = o.output[b] - o2.output[b];
     }
 };
@@ -54,7 +56,8 @@ class FS_T<FastNoise::Multiply, FS> : public virtual FastNoise::Multiply, public
         Output                      o2( o2b );
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = o.output[b] * o2.output[b];
     }
 };
@@ -73,7 +76,8 @@ class FS_T<FastNoise::Divide, FS> : public virtual FastNoise::Divide, public FS_
         Output                      o2( o2b );
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = o.output[b] / o2.output[b];
     }
 };
@@ -92,7 +96,8 @@ class FS_T<FastNoise::PowFloat, FS> : public virtual FastNoise::PowFloat, public
         Output                      o2( o2b );
         this->GetSourceValue( mValue, params, u, i, o );
         this->GetSourceValue( mPow, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = FS_Pow_f32( o.output[b], o2.output[b] );
     }
 };
@@ -108,7 +113,8 @@ class FS_T<FastNoise::PowInt, FS> : public virtual FastNoise::PowInt, public FS_
     {
         constexpr auto N = Input::N;
         this->GetSourceValue( mValue, params, u, i, o );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             auto value = o.output[b];
             for( int i = 1; i < mPow; ++i )
@@ -131,7 +137,8 @@ class FS_T<FastNoise::Min, FS> : public virtual FastNoise::Min, public FS_T<Fast
         Output                      o2( o2b );
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = FS_Min_f32( o.output[b], o2.output[b] );
     }
 };
@@ -150,7 +157,8 @@ class FS_T<FastNoise::Max, FS> : public virtual FastNoise::Max, public FS_T<Fast
         Output                      o2( o2b );
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = FS_Max_f32( o.output[b], o2.output[b] );
     }
 };
@@ -171,7 +179,8 @@ class FS_T<FastNoise::MinSmooth, FS> : public virtual FastNoise::MinSmooth, publ
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
         this->GetSourceValue( mSmoothness, params, u, i, o3 );
-        for( uint bs = 0; bs < BlockSize; ++bs )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t bs = 0; bs < BlockSize; ++bs )
         {
             float32v a          = o.output[bs];
             float32v b          = o2.output[bs];
@@ -199,7 +208,8 @@ class FS_T<FastNoise::MaxSmooth, FS> : public virtual FastNoise::MaxSmooth, publ
         this->GetSourceValue( mLHS, params, u, i, o );
         this->GetSourceValue( mRHS, params, u, i, o2 );
         this->GetSourceValue( mSmoothness, params, u, i, o3 );
-        for( uint bs = 0; bs < BlockSize; ++bs )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t bs = 0; bs < BlockSize; ++bs )
         {
             float32v a          = o.output[bs];
             float32v b          = o2.output[bs];
@@ -227,7 +237,8 @@ class FS_T<FastNoise::Fade, FS> : public virtual FastNoise::Fade, public FS_T<Fa
         this->GetSourceValue( mFade, params, u, i, o );
         this->GetSourceValue( mA, params, u, i, o2 );
         this->GetSourceValue( mB, params, u, i, o3 );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             float32v fade = FS_Abs_f32( o.output[b] );
             o.output[b]   = FS_FMulAdd_f32( o2.output[b], float32v( 1 ) - fade, o3.output[b] * fade );

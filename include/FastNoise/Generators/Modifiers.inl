@@ -13,8 +13,9 @@ class FS_T<FastNoise::DomainScale, FS> : public virtual FastNoise::DomainScale, 
         constexpr auto N = Input::N;
         Input          i2( i.size() );
 
-        auto scale = float32v( mScale );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto scale     = float32v( mScale );
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             for( uint n = 0; n < N; ++n )
                 i2.v[b][n] = i.v[b][n] * scale;
         GetSourceValue( mSource, params, u, i2, o );
@@ -38,7 +39,8 @@ class FS_T<FastNoise::DomainOffset, FS> : public virtual FastNoise::DomainOffset
         for( uint n = 0; n < N; ++n )
         {
             this->GetSourceValue( mOffset[n], params, u, i, offset );
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
                 i2.v[b][n] += offset.output[b];
         }
 
@@ -62,7 +64,8 @@ class FS_T<FastNoise::DomainRotate, FS> : public virtual FastNoise::DomainRotate
             Input i2( i.size() );
             if( mPitchSin == 0.0f && mRollSin == 0.0f )
             {
-                for( uint b = 0; b < BlockSize; ++b )
+                auto BlockSize = i.MaxVectorsInBlock();
+                for( std::uint32_t b = 0; b < BlockSize; ++b )
                 {
                     auto x     = i.v[b][0];
                     auto y     = i.v[b][1];
@@ -72,7 +75,8 @@ class FS_T<FastNoise::DomainRotate, FS> : public virtual FastNoise::DomainRotate
             }
             else
             {
-                for( uint b = 0; b < BlockSize; ++b )
+                auto BlockSize = i.MaxVectorsInBlock();
+                for( std::uint32_t b = 0; b < BlockSize; ++b )
                 {
                     auto x     = i.v[b][0];
                     auto y     = i.v[b][1];
@@ -85,7 +89,8 @@ class FS_T<FastNoise::DomainRotate, FS> : public virtual FastNoise::DomainRotate
         else if constexpr( N == 3 )
         {
             Input i2( i.size() );
-            for( uint b = 0; b < BlockSize; ++b )
+            auto  BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 auto x     = i.v[b][0];
                 auto y     = i.v[b][1];
@@ -126,7 +131,8 @@ class FS_T<FastNoise::Remap, FS> : public virtual FastNoise::Remap, public FS_T<
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         this->GetSourceValue( mSource, params, u, i, o );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = float32v( mToMin ) + ( ( o.output[b] - float32v( mFromMin ) ) / float32v( mFromMax - mFromMin ) * float32v( mToMax - mToMin ) );
     }
 };
@@ -175,12 +181,13 @@ class FS_T<FastNoise::Octaves, FS> : public virtual FastNoise::Octaves, public F
         float32v ratio     = float32v( 1 / mFactor );
         auto     factor    = float32v( mFactor );
         Input    inpScaled = i;
-        for( int i = 0; i < mCount; ++i )
+        for( int oct = 0; oct < mCount; ++oct )
         {
             inpScaled.Multiply( ratio );
             this->GetSourceValue( mSource, params, u, inpScaled, next );
-            for( uint i = 0; i < BlockSize; ++i )
-                Noise[i] += factor * next[i];
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
+                Noise[b] += factor * next[b];
             factor *= factor;
         }
     }
@@ -198,9 +205,10 @@ class FS_T<FastNoise::Clamp, FS> : public virtual FastNoise::Clamp, public FS_T<
     {
 
         this->GetSourceValue( mSource, params, u, i, Noise );
-        auto max = float32v( mMax );
-        auto min = float32v( mMin );
-        for( uint i = 0; i < BlockSize; ++i )
+        auto max       = float32v( mMax );
+        auto min       = float32v( mMin );
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t i = 0; i < BlockSize; ++i )
         {
             Noise[i] = FS_Select_f32( Noise[i] < min, min, Noise[i] );
             Noise[i] = FS_Select_f32( Noise[i] > max, max, Noise[i] );
@@ -218,7 +226,8 @@ class FS_T<FastNoise::ConvertRGBA8, FS> : public virtual FastNoise::ConvertRGBA8
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         this->GetSourceValue( mSource, params, u, i, o );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             float32v source = o.output[b];
 
@@ -286,12 +295,14 @@ class FS_T<FastNoise::Terrace, FS> : public virtual FastNoise::Terrace, public F
         auto SmoothnessRecip = float32v( mSmoothnessRecip );
         auto MultiplierRecip = float32v( mMultiplierRecip );
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] *= Multiplier;
 
         if( mSmoothness != 0.0f )
         {
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 float32v rounded = FS_Round_f32( o.output[b] );
 
@@ -311,7 +322,8 @@ class FS_T<FastNoise::Terrace, FS> : public virtual FastNoise::Terrace, public F
         }
         else
         {
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 float32v rounded = FS_Round_f32( o.output[b] );
                 o.output[b]      = rounded * MultiplierRecip;
@@ -335,7 +347,8 @@ class FS_T<FastNoise::DomainAxisScale, FS> : public virtual FastNoise::DomainAxi
 
         for( uint n = 0; n < N; ++n )
         {
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
                 i2.v[b][n] *= float32v( mScale[n] );
         }
 
@@ -363,7 +376,8 @@ class FS_T<FastNoise::AddDimension, FS> : public virtual FastNoise::AddDimension
             this->GetSourceValue( mNewDimensionPosition, params, u, i, o );
             BlockInput<N + 1> i2( i.size() );
 
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 for( uint n = 0; n < N; ++n )
                     i2.v[b][n] = i.v[b][n];
@@ -392,7 +406,8 @@ class FS_T<FastNoise::RemoveDimension, FS> : public virtual FastNoise::RemoveDim
         {
             BlockInput<N - 1> i2( i.size() );
 
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 auto& dst = i2.v[b];
                 auto& src = i.v[b];
@@ -440,7 +455,8 @@ class FS_T<FastNoise::EdgeFalloff, FS> : public virtual FastNoise::EdgeFalloff, 
         {
             auto edgeLvl = float32v( mEdgeLevel );
             this->GetSourceValue( mSource, params, u, i, o );
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 auto dist  = FS_Pow_f32( i.RadialDistance( b, u ), float32v( mFalloff ) );
                 auto value = o.output[b];

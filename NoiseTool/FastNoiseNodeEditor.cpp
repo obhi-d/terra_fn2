@@ -1426,7 +1426,7 @@ FastNoise::SmartNode<> FastNoiseNodeEditor::GenerateSelectedPreview()
 
 FastNoise::OutputMinMax FastNoiseNodeEditor::GenerateNodePreviewNoise( FastNoise::Generator* gen, FastNoise::Buffer& noise )
 {
-    FastNoise::Generator::Context context( noise );
+    FastNoise::Generator::Context context( noise, { Node::NoiseSize / -2, Node::NoiseSize / -2, 0, 0 } );
     switch( mNodeGenType )
     {
     case NoiseTexture::GenType_2D:

@@ -394,7 +394,7 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildMeshData( const 
 
 MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildVoxel3DMesh( const BuildData& buildData, FastNoise::Buffer& density, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
 {
-    FastNoise::Generator::Context ctx( density );
+    FastNoise::Generator::Context ctx( density, { buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1, 0 } );
     buildData.generator->GenUniformGrid3D( ctx,
                                            buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1,
                                            SIZE_GEN, SIZE_GEN, SIZE_GEN, buildData.frequency, buildData.seed );
@@ -545,7 +545,7 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
     int                           nbVertX = sizeX + 1;
     int                           nbVertY = sizeY + 1;
     FastNoise::Buffer             density( 32, nbVertX * nbVertY );
-    FastNoise::Generator::Context ctx( density );
+    FastNoise::Generator::Context ctx( density, { buildData.offset.x(), buildData.offset.y(), 0, 0 } );
     FastNoise::OutputMinMax       minMax;
     ctx.totalPlanes[0] = buildData.heightmapPlanes[0];
     ctx.totalPlanes[1] = buildData.heightmapPlanes[1];
@@ -614,7 +614,7 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
 MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData& buildData, FastNoise::Buffer& density, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
 {
     constexpr uint32_t            SIZE_GEN_HEIGHTMAP = SIZE + 1;
-    FastNoise::Generator::Context ctx( density );
+    FastNoise::Generator::Context ctx( density, { buildData.pos.x(), buildData.pos.z(), 0, 0 } );
     auto                          densityValues = density.begin();
 
     buildData.generator->GenUniformGrid2D( ctx,

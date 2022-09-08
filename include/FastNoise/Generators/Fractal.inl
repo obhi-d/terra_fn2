@@ -35,7 +35,8 @@ class FS_T<FastNoise::FractalFBm, FS> : public virtual FastNoise::FractalFBm, pu
 
         auto newParams = params;
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             Sum[b] = Noise[b] * Amp[0];
 
         for( int t = 1; t < mOctaves; t++ )
@@ -45,7 +46,8 @@ class FS_T<FastNoise::FractalFBm, FS> : public virtual FastNoise::FractalFBm, pu
             i2.Multiply( lacunarity );
             this->GetSourceValue( mSource, newParams, u, i2, LacInp );
 
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 Amp[b] *= FnUtils::Lerp( float32v( 1 ), ( Noise[b] + float32v( 1 ) ) * float32v( 0.5f ), WeightedStrength[b] );
                 Amp[b] *= Gain[b];
@@ -84,7 +86,8 @@ class FS_T<FastNoise::FractalRidged, FS> : public virtual FastNoise::FractalRidg
         float32v lacunarity( mLacunarity );
         auto     newParams = params;
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             Noise[b] = FS_Abs_f32( Noise[b] );
             Sum[b]   = ( Noise[b] * float32v( -2 ) + float32v( 1 ) ) * Amp[0];
@@ -97,7 +100,8 @@ class FS_T<FastNoise::FractalRidged, FS> : public virtual FastNoise::FractalRidg
             i2.Multiply( lacunarity );
             this->GetSourceValue( mSource, newParams, u, i2, LacInp );
 
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 Amp[b] *= FnUtils::Lerp( float32v( 1 ), float32v( 1 ) - Noise[b], WeightedStrength[b] );
                 Amp[b] *= Gain[b];
@@ -144,7 +148,8 @@ class FS_T<FastNoise::FractalPingPong, FS> : public virtual FastNoise::FractalPi
         float32v lacunarity( mLacunarity );
         auto     newParams = params;
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             Noise[b] = PingPong( ( Noise[b] + float32v( 1 ) ) * PingPongStrength[b] );
             Sum[b]   = Noise[b] * Amp[0];
@@ -157,7 +162,8 @@ class FS_T<FastNoise::FractalPingPong, FS> : public virtual FastNoise::FractalPi
             i2.Multiply( lacunarity );
             this->GetSourceValue( mSource, params, u, i2, LacInp );
 
-            for( uint b = 0; b < BlockSize; ++b )
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
                 Amp[b] *= FnUtils::Lerp( float32v( 1 ), ( Noise[b] + float32v( 1 ) ) * float32v( 0.5f ), WeightedStrength[b] );
                 Amp[b] *= Gain[b];

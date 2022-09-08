@@ -329,7 +329,7 @@ void NoiseTexture::DoExportBMP()
             }
             mExportThread = std::thread( [buildData = mExportBuildData, this]() {
                 mExportProgress = 0;
-                auto data       = BuildTexture<FastNoise::ConvertRGBA8>( buildData );
+                auto data       = BuildTexture<FastNoise::ConvertRGBA8>( buildData, Vector4() );
 
                 std::filesystem::path filename;
                 if( !buildData.path.empty() )
@@ -447,7 +447,7 @@ void NoiseTexture::ReGenerate( FastNoise::SmartNodeArg<> generator )
     SetPreviewTexture( noiseImage );
 }
 template<typename Wrapper>
-NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData )
+NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData, Magnum::Vector4 offset )
 {
     static thread_local FastNoise::Buffer noiseData;
     noiseData.resize( 32, (size_t)buildData.size.x() * buildData.size.y() );
@@ -455,16 +455,18 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     auto gen = FastNoise::New<Wrapper>( buildData.generator->GetSIMDLevel() );
     gen->SetSource( buildData.generator );
 
-    auto context           = FastNoise::Generator::Context( noiseData );
+    auto context           = FastNoise::Generator::Context( noiseData, { (int)buildData.offset.x(), (int)buildData.offset.y() } );
     context.planeId[0]     = buildData.plane.x();
     context.planeId[1]     = buildData.plane.y();
     context.totalPlanes[0] = buildData.numberOfPlanes.x();
     context.totalPlanes[1] = buildData.numberOfPlanes.y();
+    offset += buildData.offset;
     switch( buildData.generationType )
     {
     case GenType_2D:
+
         gen->GenUniformGrid2D( context,
-                               (int)buildData.offset.x(), (int)buildData.offset.y(),
+                               (int)offset.x(), (int)offset.y(),
                                buildData.size.x(), buildData.size.y(),
                                buildData.frequency, buildData.seed );
         break;
@@ -477,14 +479,14 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
 
     case GenType_3D:
         gen->GenUniformGrid3D( context,
-                               (int)buildData.offset.x(), (int)buildData.offset.y(), (int)buildData.offset.z(),
+                               (int)offset.x(), (int)offset.y(), (int)offset.z(),
                                buildData.size.x(), buildData.size.y(), 1,
                                buildData.frequency, buildData.seed );
         break;
 
     case GenType_4D:
         gen->GenUniformGrid4D( context,
-                               (int)buildData.offset.x(), (int)buildData.offset.y(), (int)buildData.offset.z(), (int)buildData.offset.w(),
+                               (int)offset.x(), (int)offset.y(), (int)offset.z(), (int)offset.w(),
                                buildData.size.x(), buildData.size.y(), 1, 1,
                                buildData.frequency, buildData.seed );
         break;
@@ -497,7 +499,7 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
 
 void NoiseTexture::BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData, Magnum::Vector4 offset )
 {
-    auto   data   = BuildTexture<FastNoise::ConvertRAW16>( buildData );
+    auto   data   = BuildTexture<FastNoise::ConvertRAW16>( buildData, offset );
     float* floats = data.copy.begin();
     for( std::size_t pix = 0; pix < buffer.size(); ++pix )
         buffer[pix] = static_cast<std::uint16_t>( floats[pix] );
@@ -514,7 +516,7 @@ void NoiseTexture::GenerateLoopThread( GenerateQueue<BuildData>& generateQueue, 
             return;
         }
 
-        TextureData texData = BuildTexture<FastNoise::ConvertRGBA8>( buildData );
+        TextureData texData = BuildTexture<FastNoise::ConvertRGBA8>( buildData, Vector4() );
 
         if( !completeQueue.Push( texData ) )
         {

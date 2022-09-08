@@ -20,7 +20,8 @@ class FS_T<FastNoise::DomainWarp, FS> : public virtual FastNoise::DomainWarp, pu
         this->GetSourceValue( mWarpAmplitude, params, u, i, o2 );
         auto wrapFreq = float32v( mWarpFrequency );
 
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             auto& pos = i2.v[b];
             if constexpr( N == 2 )

@@ -35,7 +35,8 @@ class FS_T<FastNoise::CellularValue, FS> : public virtual FastNoise::CellularVal
         typename Output::LocalBlock lb;
         Output                      jitter( lb );
         GetSourceValue( mJitterModifier, params, u, i, jitter );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             o.output[b] = Gen( params.seed, jitter.output[b], i.v[b][I]... );
         }
@@ -289,7 +290,8 @@ class FS_T<FastNoise::CellularDistance, FS> : public virtual FastNoise::Cellular
         typename Output::LocalBlock lb;
         Output                      jitter( lb );
         GetSourceValue( mJitterModifier, params, u, i, jitter );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             o.output[b] = Gen( params.seed, jitter.output[b], i.v[b][I]... );
         }
@@ -535,7 +537,8 @@ class FS_T<FastNoise::CellularLookup, FS> : public virtual FastNoise::CellularLo
         Input                       cells;
 
         GetSourceValue( mJitterModifier, params, u, i, jitter );
-        for( uint b = 0; b < BlockSize; ++b )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
             Gen( params.seed, jitter.output[b], cells.v[b], i.v[b][I]... );
 
         auto m = params;
