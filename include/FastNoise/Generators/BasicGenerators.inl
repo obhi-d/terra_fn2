@@ -172,10 +172,6 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
                     float* fd = (float*)&sample;
                     for( uint p = 0; p < FS_Size_32(); ++p )
                     {
-                        if( fu[p] < 0.0f || fu[p] > 1.0f )
-                        {
-                            throw fu;
-                        }
                         if constexpr( Sampling == FastNoise::Sampling::e1x )
                             fd[p] = mImage->sample( fu[p], fv[p] );
                         else
