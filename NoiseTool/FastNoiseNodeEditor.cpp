@@ -888,6 +888,7 @@ void FastNoiseNodeEditor::DoHistory()
             ImGui::TableSetupColumn( "Name" );
             ImGui::TableSetupColumn( "Action" );
             ImGui::TableHeadersRow();
+            int id = 0;
             for( auto& e: mHistory )
             {
 
@@ -896,17 +897,21 @@ void FastNoiseNodeEditor::DoHistory()
                 ImGui::TableNextColumn();
                 ImGui::Text( e.first.c_str() );
                 ImGui::TableNextColumn();
+                ImGui::PushID( id++ );
                 if( ImGui::Button( ICON_FA_COPY ) )
                 {
                     ImGui::SetClipboardText( e.second.c_str() );
                 }
+                ImGui::PopID();
                 ImGui::SameLine();
+                ImGui::PushID( id++ );
                 if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
                 {
                     e.first  = "";
                     e.second = "";
                     ImGuiExtra::MarkSettingsDirty();
                 }
+                ImGui::PopID();
                 ImGui::TableNextRow();
             }
         }
@@ -1020,7 +1025,7 @@ void FastNoiseNodeEditor::DoNodes()
         ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, ImVec2( 4, 4 ) );
         if( ImGui::BeginPopupContextItem() )
         {
-            if( ImGui::MenuItem( "Copy Encoded Node Tree" ) )
+            if( ImGui::MenuItem(ICON_FA_COPY " Node Tree" ) )
             {
                 AddHistoryRecord();
                 ImGui::SetClipboardText( node.second.serialised.c_str() );
@@ -1335,9 +1340,13 @@ void FastNoiseNodeEditor::DoContextMenu()
                     AddNodeFromEncodedString( gDemoNodeTrees[i][1], mContextStartPos );
                 }
             }
+
             ImGui::EndMenu();
         }
-
+        if( ImGui::MenuItem( ICON_FA_PASTE " Copied Node" ) )
+        {
+            AddNodeFromEncodedString( ImGui::GetClipboardText(), mContextStartPos );
+        }
         ImGui::EndPopup();
     }
 
@@ -1400,6 +1409,7 @@ void FastNoiseNodeEditor::DoContextMenu()
 
         ImGui::EndPopup();
     }
+
     ImGui::PopStyleVar();
 }
 

@@ -18,6 +18,7 @@
 #include "ImGuiExtra.h"
 #include "NoiseTexture.h"
 
+#include "ImGuiFileDialog.h"
 
 using namespace Magnum;
 
@@ -235,10 +236,21 @@ void NoiseTexture::DoExportRAW()
             ImGuiExtra::MarkSettingsDirty();
         }
 
-        if( ImGui::InputText( "Path", mExportBuildData.path.data(), mExportBuildData.path.size() ) )
+        if( ImGui::Button( "Browse" ) )
+            ImGuiFileDialog::Instance()->OpenDialog( "BrowseFileDlgKey", "Raw", nullptr, "." );
+
+        if( ImGuiFileDialog::Instance()->Display( "BrowseFileDlgKey", 32, ImVec2 { 600, 400 } ) )
         {
-            ImGuiExtra::MarkSettingsDirty();
+            if( ImGuiFileDialog::Instance()->IsOk() )
+            {
+                mExportBuildData.path = ImGuiFileDialog::Instance()->GetFilePathName();
+                ImGuiExtra::MarkSettingsDirty();
+            }
+            ImGuiFileDialog::Instance()->Close();
         }
+
+        ImGui::SameLine();
+        ImGui::Text( mExportBuildData.path.data() );
 
         if( ImGui::Button( "Export (async)" ) )
         {

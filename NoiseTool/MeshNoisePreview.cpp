@@ -201,6 +201,7 @@ void MeshNoisePreview::CreateChunksForStaticHeightMap( bool regen )
     {
         mBuildData.pos.x() = mBuildData.offset.x();
         mBuildData.pos.z() = mBuildData.offset.y();
+        mGenerateQueue.Clear();
         mGenerateQueue.Push( mBuildData );
     }
 }

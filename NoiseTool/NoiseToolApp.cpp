@@ -179,7 +179,7 @@ void NoiseToolApp::drawEvent()
     }
 
     mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(), mCameraObject.transformation().translation() );
-
+    
     /* Set appropriate states. If you only draw ImGui, it is sufficient to
        just enable blending and scissor test in the constructor. */
     GL::Renderer::enable( GL::Renderer::Feature::Blending );
@@ -367,6 +367,16 @@ void NoiseToolApp::HandleKeyEvent( KeyEvent::Key key, bool value )
         break;
     case KeyEvent::Key::RightShift:
         mKeyDown[Key_RShift] = value;
+        break;
+    case KeyEvent::Key::RightCtrl:
+    case KeyEvent::Key::LeftCtrl:
+        mKeyDown[Key_Ctrl] = value;
+        break;
+    case KeyEvent::Key::V:
+        mKeyDown[Key_V] = value;
+        break;
+    case KeyEvent::Key::C:
+        mKeyDown[Key_C] = value;
         break;
     default:
         break;

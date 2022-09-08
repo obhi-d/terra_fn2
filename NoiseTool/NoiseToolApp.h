@@ -54,7 +54,11 @@ namespace Magnum
         {
             Key_W, Key_A, Key_S, Key_D, Key_Q, Key_E,
             Key_Left, Key_Right, Key_Up, Key_Down, Key_PgUp, Key_PgDn,
-            Key_LShift, Key_RShift,
+            Key_LShift,
+            Key_RShift,
+            Key_Ctrl,
+            Key_V,
+            Key_C,
             Key_Count
         };
 

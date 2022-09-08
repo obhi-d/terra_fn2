@@ -42,6 +42,8 @@ NodeData::NodeData( const Metadata* data )
         {
             hybrids.emplace_back( nullptr, value.valueDefault );
         }
+
+        images.resize( metadata->memberImages.size() );
     }
 }
 
@@ -391,6 +393,15 @@ NodeData* DeserialiseNodeDataInternal( const std::vector<uint8_t>& serialisedNod
         }
     }
 
+
+    // Member images
+    for( auto& node: nodeData->images )
+    {
+        if( !GetFromDataStream( serialisedNodeData, serialIdx, node.index ) )
+        {
+            return nullptr;
+        }
+    }
     return nodeDataOut.emplace_back( std::move( nodeData ) ).get();
 }
 
