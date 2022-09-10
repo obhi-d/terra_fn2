@@ -33,8 +33,8 @@ namespace FastNoise
             int id = free;
             if( free >= 0 )
             {
-                free          = indexes[free];
-                indexes[free] = (int)items.size();
+                free        = indexes[free];
+                indexes[id] = (int)items.size();
             }
             else
             {

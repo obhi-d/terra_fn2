@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstring>
 #include <thread>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -10,6 +11,7 @@
 #include <Magnum/GL/Buffer.h>
 #include <Magnum/GL/Mesh.h>
 #include <Magnum/GL/Shader.h>
+#include <Magnum/GL/Texture.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/Vector3.h>
 
@@ -18,11 +20,15 @@
 #include "FastNoise/FastNoise.h"
 #include "MultiThreadQueues.h"
 
+// #define HAS_TRUE_NORMAL
+
 namespace Magnum
 {
     class MeshNoisePreview
     {
     public:
+        static constexpr std::uint32_t MaxHeightmapColorMapRes = 1024;
+
         MeshNoisePreview();
         ~MeshNoisePreview();
 
@@ -44,13 +50,38 @@ namespace Magnum
             "Heightmap 2D\0"
             "Heightmap Output Preview\0";
 
+        using ColorLayerValue = std::vector<std::tuple<Color3, float, bool>>;
+
+        struct Voxel3D
+        {
+        };
+
+        struct Rotation
+        {
+            float theta = 0.0f;
+            float phi   = 0.0f;
+
+            Vector3 toDir() const
+            {
+                constexpr float pi       = 3.14159265358979323846f;
+                constexpr float radf     = pi / 180.0f;
+                auto            theta    = this->theta * radf;
+                auto            phi      = this->phi * radf;
+                auto            sinTheta = std::sin( theta );
+                auto            cosTheta = std::cos( theta );
+                auto            sinPhi   = std::sin( phi );
+                return -Vector3( sinPhi * cosTheta, std::cos( phi ), sinPhi * sinTheta ).normalized();
+            }
+        };
 
         class VertexLightShader : public GL::AbstractShaderProgram
         {
         public:
-            typedef GL::Attribute<0, Vector4> PositionLight;
+            using PositionLight = GL::Attribute<0, Vector4>;
+            using Normal        = GL::Attribute<1, Vector4>;
 
             explicit VertexLightShader();
+            explicit VertexLightShader( Voxel3D );
             explicit VertexLightShader( NoCreateT ) noexcept :
                 AbstractShaderProgram { NoCreate }
             {
@@ -62,13 +93,30 @@ namespace Magnum
             VertexLightShader& operator=( VertexLightShader&& ) noexcept = default;
 
             VertexLightShader& SetTransformationProjectionMatrix( const Matrix4& matrix );
-            VertexLightShader& SetColorTint( const Color3& color );
+            VertexLightShader& SetSunIntensity( Color3 color, float intensity );
+            VertexLightShader& SetSunDirection( Vector3 sunDir );
+            VertexLightShader& SetHeightColorMap( ColorLayerValue const& colorMap );
+            VertexLightShader& SetHeightMultiplier( float iHeightMul );
+            VertexLightShader& SetRenderStyle( int spec );
 
         private:
-            GL::Shader CreateShader( GL::Version version, GL::Shader::Type type );
+            enum class Type
+            {
+                Default,
+                CompressedNormals
+            };
 
-            int mTransformationProjectionMatrixUniform = 0;
-            int mColorTintUniform                      = 1;
+            void       ContinueDefaultBuild( Type );
+            GL::Shader CreateShader( GL::Version version, GL::Shader::Type type, Type iType );
+
+            GL::Texture1D mHeightColors;
+
+            int mHeightMultiplierUniform               = 0;
+            int mHeightColorMapUniform                 = 1;
+            int mTransformationProjectionMatrixUniform = 2;
+            int mSunColor                              = 3;
+            int mSunDirection                          = 4;
+            int mCompressSpec                          = 5;
         };
 
         class Chunk
@@ -81,7 +129,15 @@ namespace Magnum
                 {
                 }
 
+
                 Vector4 posLight;
+#ifdef HAS_TRUE_NORMAL
+                VertexData( Vector3 p, float c, Vector3 n ) :
+                    posLight( p, c ), normal( n, 1.0f )
+                {
+                }
+                Vector4 normal;
+#endif
             };
 
             struct MeshData
@@ -137,15 +193,20 @@ namespace Magnum
             {
                 FastNoise::SmartNode<const FastNoise::Generator> generator;
                 Vector3i                                         pos;
-                Color3                                           color;
                 float                                            frequency, isoSurface, heightmapMultiplier;
                 int32_t                                          seed;
                 MeshType                                         meshType;
                 uint32_t                                         genVersion;
+                Color3                                           sunColor     = Color3( 1.0f );
+                float                                            sunIntensity = 1.0f;
+                Rotation                                         sunRotation;
+                int32_t                                          compressPrec = 31;
                 // Bound settings
-                Vector2i offset;
-                int32_t  heightmapSize[2]   = { SIZE, SIZE };
-                int32_t  heightmapPlanes[2] = { 4, 4 };
+
+                ColorLayerValue strataColorPerHeight;
+                Vector2i        offset;
+                int32_t         heightmapSize[2]   = { SIZE, SIZE };
+                int32_t         heightmapPlanes[2] = { 4, 4 };
             };
 
             static MeshData                          BuildMeshData( const BuildData& buildData );
@@ -191,6 +252,7 @@ namespace Magnum
         void  UpdateChunksForPosition( Vector3 position );
         void  UpdateChunkQueues( const Vector3& position );
         float GetLoadRangeModifier();
+        void  UpdateHeightTexture();
 
         void  StartTimer();
         float GetTimerDurationMs();
@@ -217,6 +279,9 @@ namespace Magnum
         std::vector<std::thread>                       mThreads;
         std::chrono::high_resolution_clock::time_point mTimerStart;
 
-        VertexLightShader mShader;
+        VertexLightShader mMeshShader;
+        VertexLightShader mVoxelShader;
+
+        VertexLightShader* mShader = nullptr;
     };
 } // namespace Magnum

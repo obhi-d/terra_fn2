@@ -1,78 +1,64 @@
-#if (!defined(GL_ES) && __VERSION__ >= 130) || (defined(GL_ES) && __VERSION__ >= 300)
-    #define NEW_GLSL
+#extension GL_ARB_explicit_attrib_location: enable
+#extension GL_ARB_shading_language_420pack: enable
+#extension GL_ARB_explicit_uniform_location: enable
+#extension GL_ARB_shader_bit_encoding: enable
+#extension GL_ARB_gpu_shader5 : enable
+#extension GL_ARB_shading_language_packing : enable
+
+#define UniformLocation(x) layout(location = x) 
+
+
+// Uniform Buffers 
+UniformLocation(3) uniform highp vec4 sunColor = vec4(1.0);
+UniformLocation(1) uniform sampler1D heightColorMap;
+
+#ifdef HAS_COMPRESSED_NORMALS
+// https://www.shadertoy.com/view/Mtfyzl
+
+UniformLocation(4) uniform vec3 sunDirection;
+#ifdef EQUAL_PREC
+UniformLocation(5) uniform float compressSpec;
+#else
+UniformLocation(5) uniform int compressSpec;
 #endif
 
-#if !defined(GL_ES) && defined(GL_ARB_explicit_attrib_location) && !defined(DISABLE_GL_ARB_explicit_attrib_location)
-    #extension GL_ARB_explicit_attrib_location: enable
-    #define EXPLICIT_ATTRIB_LOCATION
+in highp vec3 interpolatedNormal;
+
 #endif
 
-#if !defined(GL_ES) && defined(GL_ARB_shading_language_420pack) && !defined(DISABLE_GL_ARB_shading_language_420pack)
-    #extension GL_ARB_shading_language_420pack: enable
-    #define RUNTIME_CONST
-    #define EXPLICIT_TEXTURE_LAYER
+#if defined(HAS_COMPRESSED_NORMALS) || defined(HAS_TRUE_NORMAL)
+in highp float height;
+#else
+in highp vec2 interpolatedLight;
 #endif
 
-#if !defined(GL_ES) && defined(GL_ARB_explicit_uniform_location) && !defined(DISABLE_GL_ARB_explicit_uniform_location)
-    #extension GL_ARB_explicit_uniform_location: enable
-    #define EXPLICIT_UNIFORM_LOCATION
-#endif
 
-#if defined(GL_ES) && __VERSION__ >= 300
-    #define EXPLICIT_ATTRIB_LOCATION
-    /* EXPLICIT_TEXTURE_LAYER, EXPLICIT_UNIFORM_LOCATION and RUNTIME_CONST is not
-       available in OpenGL ES */
-#endif
+// Outputs */
 
-/* Precision qualifiers are not supported in GLSL 1.20 */
-#if !defined(GL_ES) && __VERSION__ == 120
-    #define highp
-    #define mediump
-    #define lowp
-#endif
-
-#ifndef NEW_GLSL
-#define in varying
-#define fragmentColor gl_FragColor
-#endif
-
-/* Uniform Buffers */
-    
-#ifdef EXPLICIT_UNIFORM_LOCATION
-layout(location = 1)
-#endif
-
-uniform highp vec4 colorTint
-    #ifndef GL_ES
-    = vec4(1.0)
-    #endif
-    ;
-
-/* Inputs */
-
-in highp float interpolatedLight;
-
-/* Outputs */
-
-#ifdef NEW_GLSL
-#ifdef EXPLICIT_ATTRIB_LOCATION
-layout(location = 0)
-#endif
-out highp vec4 fragmentColor;
-#endif
+layout(location = 0) out highp vec4 fragmentColor;
 
 void main() 
 {
-    highp float light;
-
-    if(gl_FrontFacing) 
-    {
-        light = interpolatedLight;
-    }
-    else
+    highp vec4 light;
+#if defined(HAS_COMPRESSED_NORMALS) || defined(HAS_TRUE_NORMAL)
+        light = texture(heightColorMap, height);
+#else
+        light = texture(heightColorMap, interpolatedLight.y) * interpolatedLight.x;
+#endif
+    if(!gl_FrontFacing) 
     { 
-        light = (1.0 - interpolatedLight) * 0.08;
+        light = (1.0 - light) * 0.08;
     }
-
-    fragmentColor = colorTint * light;
+    vec4 color = vec4(sunColor.xyz, 1.0);
+    float intensity = sunColor.w;
+#ifdef HAS_COMPRESSED_NORMALS
+#ifdef EQUAL_PREC
+    float factor = floor(dot(normalize(interpolatedNormal), sunDirection) * compressSpec) / compressSpec;
+    fragmentColor = (color * 0.2 +  light * 0.8) * factor * intensity;
+#else
+    fragmentColor = (color * clamp(dot(normalize(interpolatedNormal), sunDirection), 0.0, 1.0 ) * light) * intensity;
+#endif
+#else
+    fragmentColor = color * intensity * light;
+#endif
 }

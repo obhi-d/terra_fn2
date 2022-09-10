@@ -2,25 +2,86 @@
 #include <cmath>
 #include <thread>
 
+#include <Corrade/Containers/ArrayViewStl.h>
 #include <Corrade/Utility/Resource.h>
+#include <Magnum/GL/GL.h>
+#include <Magnum/GL/Texture.h>
+#include <Magnum/GL/TextureFormat.h>
+#include <Magnum/ImGuiIntegration/Widgets.h>
+#include <Magnum/ImageView.h>
 #include <Magnum/Math/Color.h>
 #include <Magnum/Math/Frustum.h>
+#include <Magnum/Math/Functions.h>
 #include <Magnum/Math/Intersection.h>
 #include <Magnum/Math/Matrix4.h>
+#include <Magnum/PixelFormat.h>
 #include <Magnum/Shaders/Implementation/CreateCompatibilityShader.h>
 
+#include "IconsFontAwesome6.h"
 #include "ImGuiExtra.h"
 #include "MeshNoisePreview.h"
 
 using namespace Magnum;
 
-MeshNoisePreview::MeshNoisePreview()
+#define EQUAL_PREC
+
+#ifdef EQUAL_PREC
+constexpr int MaxRenderStyle = 10000;
+#else
+constexpr int MaxRenderStyle = 16;
+#endif
+
+auto msign( Vector2 v )
 {
+    return Vector2( ( v.x() >= 0.0f ) ? 1.0f : -1.0f,
+                    ( v.y() >= 0.0 ) ? 1.0f : -1.0f );
+}
+
+auto CompressNormal( Vector3 nor, std::uint32_t CompressionPrec ) -> float
+{
+    nor /= ( std::abs( nor.x() ) + std::abs( nor.y() ) + std::abs( nor.z() ) );
+    nor.xy()  = ( nor.z() >= 0.0 ) ? nor.xy() : ( ( Vector2( 1.0f ) - abs( Vector2( nor.y(), nor.x() ) ) ) * msign( nor.xy() ) );
+    Vector2 v = Vector2( 0.5 ) + Vector2( 0.5 ) * nor.xy();
+
+    std::uint32_t mu = ( 1u << CompressionPrec ) - 1u;
+    Vector2ui     d  = Vector2ui( floor( clamp( v, -1.0f, 1.0f ) * float( mu ) + Vector2( 0.5 ) ) );
+    mu               = ( d.y() << CompressionPrec ) | d.x();
+    return *(float*)( &mu );
+};
+
+uint32_t packSnorm2x16( Vector2 const& v )
+{
+    union
+    {
+        signed short in[2];
+        uint32_t     out;
+    } u;
+
+    Vector2 result( round( clamp( v, -1.0f, 1.0f ) * 32767.0f ) );
+
+    u.in[0] = result[0];
+    u.in[1] = result[1];
+
+    return u.out;
+}
+
+auto CompressNormal( Vector3 nor ) -> float
+{
+    nor /= ( std::abs( nor.x() ) + std::abs( nor.y() ) + std::abs( nor.z() ) );
+    nor.xy()   = ( nor.z() >= 0.0 ) ? nor.xy() : ( ( Vector2( 1.0f ) - abs( Vector2( nor.y(), nor.x() ) ) ) * msign( nor.xy() ) );
+    auto value = packSnorm2x16( nor.xy() );
+    return *(float*)( &value );
+};
+
+MeshNoisePreview::MeshNoisePreview() :
+    mVoxelShader( Voxel3D {} )
+{
+    mShader                        = &mMeshShader;
     mBuildData.frequency           = 0.005f;
     mBuildData.seed                = 1338;
     mBuildData.isoSurface          = 0.0f;
     mBuildData.heightmapMultiplier = 100.0f;
-    mBuildData.color               = Color3( 1.0f );
+    mBuildData.sunIntensity        = 1.0f;
     mBuildData.meshType            = MeshType_Voxel3D;
 
     uint32_t threadCount = std::max( 2u, std::thread::hardware_concurrency() );
@@ -60,6 +121,8 @@ void MeshNoisePreview::ReGenerate( FastNoise::SmartNodeArg<> generator )
     mGenerateQueue.Clear();
     mBuildData.genVersion = mCompleteQueue.IncVersion();
 
+    mShader = ( mBuildData.meshType == MeshType_Voxel3D ) ? &mVoxelShader : &mMeshShader;
+
     Chunk::MeshData meshData;
     while( mCompleteQueue.Pop( meshData ) )
     {
@@ -85,7 +148,7 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
     Matrix4 transformationProjection = projection * transformation;
 
     Frustum camFrustum = Frustum::fromMatrix( transformationProjection );
-    mShader.SetTransformationProjectionMatrix( transformationProjection );
+    mShader->SetTransformationProjectionMatrix( transformationProjection );
 
     mTriCount              = 0;
     mMeshesCount           = 0;
@@ -108,8 +171,8 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
 
                 if( mBuildData.meshType == MeshType_Heightmap2D || mBuildData.meshType == MeshType_LimitedHeightmap2D )
                 {
-                    bbox.min().y() = mMinMax.min * mBuildData.heightmapMultiplier;
-                    bbox.max().y() = mMinMax.max * mBuildData.heightmapMultiplier;
+                    bbox.min().y() = mMinMax.min;
+                    bbox.max().y() = mMinMax.max;
                 }
 
                 drawObject = Math::Intersection::rangeFrustum( bbox, camFrustum );
@@ -118,7 +181,7 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
             if( drawObject )
             {
                 drawnTriCount += meshTriCount;
-                mShader.draw( *mesh );
+                mShader->draw( *mesh );
             }
         }
     }
@@ -128,9 +191,93 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
     edited |= ImGui::Combo( "Mesh Type", reinterpret_cast<int*>( &mBuildData.meshType ), MeshTypeStrings );
     edited |= ImGuiExtra::ScrollCombo( reinterpret_cast<int*>( &mBuildData.meshType ), MeshType_Count );
 
-    if( ImGui::ColorEdit3( "Mesh Colour", mBuildData.color.data() ) )
+    bool textureChanged = false;
+    bool sunChanged     = false;
+    if( ImGui::ColorEdit3( ICON_FA_SUN " Color", mBuildData.sunColor.data() ) )
     {
-        mShader.SetColorTint( mBuildData.color );
+        sunChanged = true;
+        ImGuiExtra::MarkSettingsDirty();
+    }
+
+    if( ImGui::DragFloat( ICON_FA_SUN " Intensity", &mBuildData.sunIntensity, 0.01f, 0, 100000.f ) )
+    {
+        sunChanged = true;
+        ImGuiExtra::MarkSettingsDirty();
+    }
+
+    if( ImGui::DragFloat( ICON_FA_SUN " Rotation (phi)", &mBuildData.sunRotation.phi, 0.5f, 0, 360 ) )
+    {
+        sunChanged = true;
+        ImGuiExtra::MarkSettingsDirty();
+    }
+
+    if( ImGui::DragFloat( ICON_FA_SUN " Rotation (theta)", &mBuildData.sunRotation.theta, 0.5f, 0, 180 ) )
+    {
+        sunChanged = true;
+        ImGuiExtra::MarkSettingsDirty();
+    }
+
+    if( ImGui::DragInt( "Lighting Style", &mBuildData.compressPrec, 1, 1, MaxRenderStyle ) )
+    {
+        sunChanged = true;
+#ifndef EQUAL_PREC
+        edited = true;
+#endif
+        ImGuiExtra::MarkSettingsDirty();
+    }
+
+    if( sunChanged )
+    {
+        mShader->SetSunDirection( mBuildData.sunRotation.toDir() );
+        mShader->SetSunIntensity( mBuildData.sunColor, mBuildData.sunIntensity );
+        mShader->SetRenderStyle( mBuildData.compressPrec );
+    }
+
+    if( mBuildData.meshType == MeshType_LimitedHeightmap2D )
+    {
+        // color panel
+        int colorIndex = 0;
+        for( auto& [color, level, active]: mBuildData.strataColorPerHeight )
+        {
+            ImGui::PushID( colorIndex++ );
+            if( ImGui::ColorEdit3( "", color.data() ) )
+            {
+                textureChanged = true;
+            }
+            ImGui::PopID();
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 40 );
+            ImGui::PushID( colorIndex++ );
+            if( ImGui::DragFloat( "", &level, 0.0005f, 0.0f, 1.0f, "%.3f" ) )
+            {
+                level          = std::clamp( level, 0.0f, 1.0f );
+                textureChanged = true;
+            }
+            ImGui::PopID();
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth( 20 );
+            ImGui::PushID( colorIndex++ );
+            if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
+            {
+                textureChanged = true;
+                active         = false;
+            }
+            ImGui::PopID();
+        }
+
+        if( ImGui::Button( ICON_FA_PLUS " Add Color Layer" ) )
+        {
+            if( mBuildData.strataColorPerHeight.empty() )
+                mBuildData.strataColorPerHeight.emplace_back( Color3( 0.2f, 0.2f, 0.2f ), .0f, true );
+            else
+                mBuildData.strataColorPerHeight.emplace_back( mBuildData.strataColorPerHeight.back() );
+            textureChanged = true;
+        }
+    }
+
+    if( textureChanged )
+    {
+        UpdateHeightTexture();
         ImGuiExtra::MarkSettingsDirty();
     }
 
@@ -145,7 +292,8 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
     }
     if( mBuildData.meshType == MeshType_Heightmap2D || mBuildData.meshType == MeshType_LimitedHeightmap2D )
     {
-        edited |= ImGui::DragFloat( "Heightmap Multiplier", &mBuildData.heightmapMultiplier, 0.5f );
+        if( ImGui::DragFloat( "Heightmap Multiplier", &mBuildData.heightmapMultiplier, 0.5f ) )
+            mShader->SetHeightMultiplier( mBuildData.heightmapMultiplier );
     }
     else
     {
@@ -541,6 +689,7 @@ void MeshNoisePreview::Chunk::AddQuadAO( std::vector<VertexData>& verts, std::ve
 MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData& buildData, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
 {
 
+
     int                           sizeX   = std::max( 1, buildData.heightmapSize[0] );
     int                           sizeY   = std::max( 1, buildData.heightmapSize[1] );
     int                           nbVertX = sizeX + 1;
@@ -566,7 +715,7 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
             int32_t STEP_X = 1;
             int32_t STEP_Y = nbVertX;
 
-            Vector3 sunLight = LIGHT_DIR.normalized() * ( 1.0f - AMBIENT_LIGHT ) + Vector3( AMBIENT_LIGHT );
+            // Vector3 sunLight = LIGHT_DIR.normalized() * ( 1.0f - AMBIENT_LIGHT ) + Vector3( AMBIENT_LIGHT );
 
             int32_t noiseIdx = 0;
 
@@ -576,24 +725,47 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
 
                 for( int32_t x = 0; x < buildData.heightmapSize[0]; x++ )
                 {
-                    float xf = x + offset.x();
+                    float   xf = x + offset.x();
+                    Vector3 v00( xf, densityValues[noiseIdx], yf );
+                    Vector3 v01( xf, densityValues[noiseIdx + STEP_Y], yf + 1 );
+                    Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X], yf );
+                    Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y], yf + 1 );
 
-                    Vector3 v00( xf, densityValues[noiseIdx] * buildData.heightmapMultiplier, yf );
-                    Vector3 v01( xf, densityValues[noiseIdx + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
-                    Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X] * buildData.heightmapMultiplier, yf );
-                    Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
+                    uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
 
                     // Normal for quad
-                    float light = ( sunLight * ( Math::cross( v10 - v11, v00 - v11 ).normalized() + Math::cross( v01 - v00, v11 - v00 ).normalized() ).normalized() ).dot();
+                    Vector3 normal[4] = {};
+                    normal[0] += Math::cross( v10 - v11, v00 - v11 ).normalized();
+                    normal[3 - triRotation] += normal[0];
+                    normal[2] += normal[0];
+                    normal[3] += Math::cross( v01 - v00, v11 - v00 ).normalized();
+                    normal[triRotation] += normal[3];
+                    normal[1] += normal[3];
 
+#ifdef HAS_TRUE_NORMAL
                     uint32_t vertIdx = (uint32_t)vertexData.size();
-                    vertexData.emplace_back( v00, light );
-                    vertexData.emplace_back( v01, light );
-                    vertexData.emplace_back( v10, light );
-                    vertexData.emplace_back( v11, light );
+                    vertexData.emplace_back( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ), normal[0].normalized() );
+                    vertexData.emplace_back( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ), normal[1].normalized() );
+                    vertexData.emplace_back( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ), normal[2].normalized() );
+                    vertexData.emplace_back( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ), normal[3].normalized() );
 
+#else
+                    uint32_t vertIdx = (uint32_t)vertexData.size();
+#ifdef EQUAL_PREC
+                    vertexData.emplace_back( v00, CompressNormal( normal[0].normalized() ) );
+                    vertexData.emplace_back( v01, CompressNormal( normal[1].normalized() ) );
+                    vertexData.emplace_back( v10, CompressNormal( normal[2].normalized() ) );
+                    vertexData.emplace_back( v11, CompressNormal( normal[3].normalized() ) );
+#else
+                    vertexData.emplace_back( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ) );
+                    vertexData.emplace_back( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ) );
+                    vertexData.emplace_back( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ) );
+                    vertexData.emplace_back( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ) );
+#endif
+
+#endif
                     // Slice quad along longest split
-                    uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
+
                     indicies.push_back( vertIdx );
                     indicies.push_back( vertIdx + 3 - triRotation );
                     indicies.push_back( vertIdx + 2 );
@@ -637,22 +809,30 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
         {
             float xf = x + (float)buildData.pos.x();
 
-            Vector3 v00( xf, densityValues[noiseIdx] * buildData.heightmapMultiplier, yf );
-            Vector3 v01( xf, densityValues[noiseIdx + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
-            Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X] * buildData.heightmapMultiplier, yf );
-            Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
+            Vector3 v00( xf, densityValues[noiseIdx], yf );
+            Vector3 v01( xf, densityValues[noiseIdx + STEP_Y], yf + 1 );
+            Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X], yf );
+            Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y], yf + 1 );
+
+            uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
 
             // Normal for quad
-            float light = ( sunLight * ( Math::cross( v10 - v11, v00 - v11 ).normalized() + Math::cross( v01 - v00, v11 - v00 ).normalized() ).normalized() ).dot();
+            // Normal for quad
+            Vector3 normal[4] = {};
+            normal[0] += Math::cross( v10 - v11, v00 - v11 ).normalized();
+            normal[3 - triRotation] += normal[0];
+            normal[2] += normal[0];
+            normal[3] += Math::cross( v01 - v00, v11 - v00 ).normalized();
+            normal[triRotation] += normal[3];
+            normal[1] += normal[3];
 
             uint32_t vertIdx = (uint32_t)vertexData.size();
-            vertexData.emplace_back( v00, light );
-            vertexData.emplace_back( v01, light );
-            vertexData.emplace_back( v10, light );
-            vertexData.emplace_back( v11, light );
+            vertexData.emplace_back( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ) );
+            vertexData.emplace_back( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ) );
+            vertexData.emplace_back( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ) );
+            vertexData.emplace_back( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ) );
 
             // Slice quad along longest split
-            uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
             indicies.push_back( vertIdx );
             indicies.push_back( vertIdx + 3 - triRotation );
             indicies.push_back( vertIdx + 2 );
@@ -679,8 +859,11 @@ MeshNoisePreview::Chunk::Chunk( MeshData& meshData )
 
         mMesh = std::make_unique<GL::Mesh>( GL::MeshPrimitive::Triangles );
 
+#ifdef HAS_TRUE_NORMAL
+        mMesh->addVertexBuffer( GL::Buffer( GL::Buffer::TargetHint::Array, meshData.vertexData ), 0, VertexLightShader::PositionLight {}, VertexLightShader::Normal {} );
+#else
         mMesh->addVertexBuffer( GL::Buffer( GL::Buffer::TargetHint::Array, meshData.vertexData ), 0, VertexLightShader::PositionLight {} );
-
+#endif
         if( meshData.indicies.empty() )
         {
             mMesh->setCount( (int)meshData.vertexData.size() );
@@ -695,7 +878,17 @@ MeshNoisePreview::Chunk::Chunk( MeshData& meshData )
     meshData.Free();
 }
 
+MeshNoisePreview::VertexLightShader::VertexLightShader( Voxel3D )
+{
+    ContinueDefaultBuild( Type::Default );
+}
+
 MeshNoisePreview::VertexLightShader::VertexLightShader()
+{
+    ContinueDefaultBuild( Type::CompressedNormals );
+}
+
+void MeshNoisePreview::VertexLightShader::ContinueDefaultBuild( Type type )
 {
     Utility::Resource noiseToolResources( "NoiseTool" );
 
@@ -705,8 +898,8 @@ MeshNoisePreview::VertexLightShader::VertexLightShader()
     const GL::Version version = GL::Context::current().supportedVersion( { GL::Version::GLES300, GL::Version::GLES200 } );
 #endif
 
-    GL::Shader vert = CreateShader( version, GL::Shader::Type::Vertex );
-    GL::Shader frag = CreateShader( version, GL::Shader::Type::Fragment );
+    GL::Shader vert = CreateShader( version, GL::Shader::Type::Vertex, type );
+    GL::Shader frag = CreateShader( version, GL::Shader::Type::Fragment, type );
 
     CORRADE_INTERNAL_ASSERT_OUTPUT(
         vert.addSource( noiseToolResources.get( "VertexLight.vert" ) ).compile() );
@@ -715,7 +908,6 @@ MeshNoisePreview::VertexLightShader::VertexLightShader()
 
     attachShader( vert );
     attachShader( frag );
-
     /* ES3 has this done in the shader directly */
 #if !defined( MAGNUM_TARGET_GLES ) || defined( MAGNUM_TARGET_GLES2 )
 #ifndef MAGNUM_TARGET_GLES
@@ -733,7 +925,11 @@ MeshNoisePreview::VertexLightShader::VertexLightShader()
 #endif
     {
         mTransformationProjectionMatrixUniform = uniformLocation( "transformationProjectionMatrix" );
-        mColorTintUniform                      = uniformLocation( "colorTint" );
+        mHeightColorMapUniform                 = uniformLocation( "heightColorMap" );
+        mHeightMultiplierUniform               = uniformLocation( "heightMultiplier" );
+        mSunColor                              = uniformLocation( "sunColor" );
+        mSunDirection                          = uniformLocation( "sunDirection" );
+        mCompressSpec                          = uniformLocation( "compressSpec" );
     }
 
     /* Set defaults in OpenGL ES (for desktop they are set in shader code itself) */
@@ -741,9 +937,19 @@ MeshNoisePreview::VertexLightShader::VertexLightShader()
     SetTransformationProjectionMatrix( Matrix4 {} );
     SetColorTint( Color3 { 1.0f } );
 #endif
+
+    std::array<std::uint32_t, MaxHeightmapColorMapRes> data;
+    data.fill( 0xfcfcfcff );
+    ImageView1D heightMapImage( PixelFormat::RGBA8Unorm, { MaxHeightmapColorMapRes }, data );
+
+    mHeightColors = GL::Texture1D();
+    mHeightColors.setStorage( 1, GL::TextureFormat::RGBA8, MaxHeightmapColorMapRes )
+        .setSubImage( 0, {}, heightMapImage );
+    mHeightColors.bind( 0 );
+    setUniform( mHeightMultiplierUniform, 0 );
 }
 
-GL::Shader MeshNoisePreview::VertexLightShader::CreateShader( GL::Version version, GL::Shader::Type type )
+GL::Shader MeshNoisePreview::VertexLightShader::CreateShader( GL::Version version, GL::Shader::Type type, Type iType )
 {
     GL::Shader shader( version, type );
 
@@ -768,6 +974,16 @@ GL::Shader MeshNoisePreview::VertexLightShader::CreateShader( GL::Version versio
     shader.addSource( "#ifndef GL_ES\n#define GL_ES 1\n#endif\n" );
 #endif
 
+    if( iType == Type::CompressedNormals )
+        shader.addSource( "#define HAS_COMPRESSED_NORMALS\n" );
+#ifdef EQUAL_PREC
+    shader.addSource( "#define EQUAL_PREC\n" );
+#endif
+#ifdef HAS_TRUE_NORMAL
+    if( iType == Type::CompressedNormals )
+        shader.addSource( "#define HAS_TRUE_NORMAL\n" );
+#endif
+
     return shader;
 }
 
@@ -777,9 +993,69 @@ MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetTra
     return *this;
 }
 
-MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetColorTint( const Color3& color )
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetHeightMultiplier( float iHeightMul )
 {
-    setUniform( mColorTintUniform, Vector4( color, 1.0f ) );
+    setUniform( mHeightMultiplierUniform, iHeightMul );
+    return *this;
+}
+
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetSunIntensity( Color3 color, float intensity )
+{
+    setUniform( mSunColor, Vector4( color, intensity ) );
+    return *this;
+}
+
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetSunDirection( Vector3 direction )
+{
+    setUniform( mSunDirection, -direction );
+    return *this;
+}
+
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetRenderStyle( int spec )
+{
+#ifdef EQUAL_PREC
+    setUniform( mCompressSpec, (float)spec );
+#else
+    setUniform( mCompressSpec, (uint32_t)spec );
+#endif
+    return *this;
+}
+
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetHeightColorMap( ColorLayerValue const& colorMap )
+{
+    std::array<std::uint32_t, MaxHeightmapColorMapRes> data;
+
+    if( !colorMap.size() )
+    {
+        data.fill( 0xfcfcfcff );
+        ImageView1D heightMapImage( PixelFormat::RGBA8Srgb, { MaxHeightmapColorMapRes }, data );
+
+        mHeightColors.bind( 0 );
+        mHeightColors.setSubImage( 0, {}, heightMapImage );
+    }
+    else
+    {
+        auto copy = colorMap;
+        std::sort( copy.begin(), copy.end(), []( auto const& first, auto const& second ) {
+            return std::get<2>( first ) < std::get<2>( second );
+        } );
+
+        std::uint32_t index     = 0;
+        std::uint32_t lastColor = {};
+        for( auto& l: copy )
+        {
+            lastColor = Color4( std::get<0>( l ) ).toSrgbAlphaInt();
+            auto lt   = ( std::uint32_t )( std::get<1>( l ) * ( MaxHeightmapColorMapRes ) );
+            while( index < MaxHeightmapColorMapRes && index < lt )
+                data[index++] = lastColor;
+        }
+        while( index < MaxHeightmapColorMapRes )
+            data[index++] = lastColor;
+
+        ImageView1D heightMapImage( PixelFormat::RGBA8Srgb, { MaxHeightmapColorMapRes }, data );
+        mHeightColors.bind( 0 );
+        mHeightColors.setSubImage( 0, {}, heightMapImage );
+    }
     return *this;
 }
 
@@ -808,11 +1084,21 @@ void MeshNoisePreview::SetupSettingsHandlers()
         outBuf->appendf( "iso_surface=%f\n", meshNoisePreview->mBuildData.isoSurface );
         outBuf->appendf( "heightmap_multiplier=%f\n", meshNoisePreview->mBuildData.heightmapMultiplier );
         outBuf->appendf( "seed=%d\n", meshNoisePreview->mBuildData.seed );
-        outBuf->appendf( "color=%d\n", (int)meshNoisePreview->mBuildData.color.toSrgbInt() );
+        outBuf->appendf( "color=%d\n", (int)meshNoisePreview->mBuildData.sunColor.toSrgbInt() );
         outBuf->appendf( "mesh_type=%d\n", (int)meshNoisePreview->mBuildData.meshType );
         outBuf->appendf( "enabled=%d\n", (int)meshNoisePreview->mEnabled );
         outBuf->appendf( "planes=%d:%d\n", meshNoisePreview->mBuildData.heightmapPlanes[0], meshNoisePreview->mBuildData.heightmapPlanes[1] );
         outBuf->appendf( "size=%d:%d\n", meshNoisePreview->mBuildData.heightmapSize[0], meshNoisePreview->mBuildData.heightmapSize[1] );
+        outBuf->appendf( "sun_rotation=%f:%f\n", meshNoisePreview->mBuildData.sunRotation.theta, meshNoisePreview->mBuildData.sunRotation.phi );
+        outBuf->appendf( "draw_style=%d\n", meshNoisePreview->mBuildData.compressPrec );
+        outBuf->appendf( "sun_intensity=%f\n", meshNoisePreview->mBuildData.sunIntensity );
+        for( auto& [color, level, active]: meshNoisePreview->mBuildData.strataColorPerHeight )
+        {
+            if( active )
+            {
+                outBuf->appendf( "strata_color=%d:%d\n", (int)color.toSrgbInt(), (int)( MaxHeightmapColorMapRes * level ) );
+            }
+        }
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -833,17 +1119,48 @@ void MeshNoisePreview::SetupSettingsHandlers()
         sscanf( line, "mesh_type=%d", (int*)&meshNoisePreview->mBuildData.meshType );
         sscanf( line, "planes=%d:%d", meshNoisePreview->mBuildData.heightmapPlanes, meshNoisePreview->mBuildData.heightmapPlanes + 1 );
         sscanf( line, "size=%d:%d", meshNoisePreview->mBuildData.heightmapSize, meshNoisePreview->mBuildData.heightmapSize + 1 );
+        sscanf( line, "sun_rotation=%f:%f", &meshNoisePreview->mBuildData.sunRotation.theta, &meshNoisePreview->mBuildData.sunRotation.phi );
+        sscanf( line, "draw_style=%d", &meshNoisePreview->mBuildData.compressPrec );
+        sscanf( line, "sun_intensity=%f", &meshNoisePreview->mBuildData.sunIntensity );
 
-        int i;
+        int i = 0;
+        int l = 0;
         if( sscanf( line, "color=%d", &i ) == 1 )
         {
-            meshNoisePreview->mBuildData.color = Color3::fromSrgb( i );
+            meshNoisePreview->mBuildData.sunColor = Color3::fromSrgb( i );
         }
         else if( sscanf( line, "enabled=%d", &i ) == 1 )
         {
             meshNoisePreview->mEnabled = i;
         }
+        else if( sscanf( line, "strata_color=%d:%d", &i, &l ) == 2 )
+        {
+            meshNoisePreview->mBuildData.strataColorPerHeight.emplace_back( Color3::fromSrgb( i ), (float)l / (float)MaxHeightmapColorMapRes, true );
+        }
     };
-
+    editorSettings.ApplyAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler ) {
+        auto* meshNoisePreview = (MeshNoisePreview*)handler->UserData;
+        meshNoisePreview->mShader->SetHeightMultiplier( meshNoisePreview->mBuildData.heightmapMultiplier );
+        meshNoisePreview->mShader->SetSunIntensity( meshNoisePreview->mBuildData.sunColor, meshNoisePreview->mBuildData.sunIntensity );
+        meshNoisePreview->mShader->SetHeightColorMap( meshNoisePreview->mBuildData.strataColorPerHeight );
+        meshNoisePreview->mShader->SetRenderStyle( meshNoisePreview->mBuildData.compressPrec );
+        meshNoisePreview->mShader->SetSunDirection( meshNoisePreview->mBuildData.sunRotation.toDir() );
+    };
     ImGuiExtra::AddOrReplaceSettingsHandler( editorSettings );
+}
+
+void MeshNoisePreview::UpdateHeightTexture()
+{
+    if( mBuildData.strataColorPerHeight.size() > 0 )
+    {
+        auto beg = mBuildData.strataColorPerHeight.begin();
+        while( beg != mBuildData.strataColorPerHeight.end() )
+        {
+            if( !std::get<2>( *beg ) )
+                beg = mBuildData.strataColorPerHeight.erase( beg );
+            else
+                beg++;
+        }
+    }
+    mShader->SetHeightColorMap( mBuildData.strataColorPerHeight );
 }

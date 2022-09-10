@@ -259,22 +259,18 @@ class FS_T<FastNoise::ConvertRAW16, FS> : public virtual FastNoise::ConvertRAW16
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
         this->GetSourceValue( mSource, params, u, i, o );
-    }
-
-    void Finalize( Context& c ) const override
-    {
-        auto data  = (float32v*)c.output.data.get();
-        auto count = c.output.size / FS_Size_32();
-        auto ratio = float32v( 65535.0f / ( c.minMax.max - c.minMax.min ) );
-        for( uint i = 0; i < count; ++i )
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
-            float32v source = data[i];
+            float32v source = o.output[b];
 
-            source -= float32v( c.minMax.min );
-            source *= ratio;
+            source = FS_Min_f32( source, float32v( mMax ) );
+            source = FS_Max_f32( source, float32v( mMin ) );
+            source -= float32v( mMin );
 
-            auto intval = FS_Convertf32_i32( source );
-            data[i]     = FS_Casti32_f32( intval );
+            source *= float32v( 65535.0f / ( mMax - mMin ) );
+
+            o.output[b] = source;
         }
     }
 };

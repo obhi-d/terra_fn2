@@ -453,8 +453,16 @@ namespace FastNoise
             this->SetSourceMemberVariable( mSource, gen );
         }
 
+        void SetMinMax( float min, float max )
+        {
+            mMin = min;
+            mMax = max;
+        }
+
     protected:
         GeneratorSource mSource;
+        float           mMin = -1.0f;
+        float           mMax = 1.0f;
 
         template<typename T>
         friend struct MetadataT;
@@ -470,6 +478,15 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &ConvertRAW16::SetSource );
+            this->AddVariable( "Min", -1.0f,
+                               []( ConvertRAW16* p, float f ) {
+                                   p->mMin = f;
+                               } );
+
+            this->AddVariable( "Max", 1.0f,
+                               []( ConvertRAW16* p, float f ) {
+                                   p->mMax = f;
+                               } );
         }
     };
 #endif

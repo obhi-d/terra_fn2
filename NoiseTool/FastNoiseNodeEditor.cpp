@@ -530,7 +530,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         {
             if( e.second.empty() )
                 continue;
-            outBuf->appendf( "-%s:%s\n", e.first.c_str(), e.second.c_str() );
+            outBuf->appendf( "-%s=%s\n", e.first.c_str(), e.second.c_str() );
         }
     };
     histroySettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
@@ -548,7 +548,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         {
             line++;
             int i = 0;
-            while( line[i] && line[i] != ':' )
+            while( line[i] && line[i] != '=' )
                 i++;
             nameVal.first.append( line, i );
             if( !line[i] )
@@ -1025,7 +1025,7 @@ void FastNoiseNodeEditor::DoNodes()
         ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, ImVec2( 4, 4 ) );
         if( ImGui::BeginPopupContextItem() )
         {
-            if( ImGui::MenuItem(ICON_FA_COPY " Node Tree" ) )
+            if( ImGui::MenuItem( ICON_FA_COPY " Node Tree" ) )
             {
                 AddHistoryRecord();
                 ImGui::SetClipboardText( node.second.serialised.c_str() );

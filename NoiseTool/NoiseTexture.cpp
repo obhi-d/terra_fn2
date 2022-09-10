@@ -511,8 +511,8 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
 
 void NoiseTexture::BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData, Magnum::Vector4 offset )
 {
-    auto   data   = BuildTexture<FastNoise::ConvertRAW16>( buildData, offset );
-    float* floats = data.copy.begin();
+    auto  data   = BuildTexture<FastNoise::ConvertRAW16>( buildData, offset );
+    auto* floats = (float*)data.copy.begin();
     for( std::size_t pix = 0; pix < buffer.size(); ++pix )
         buffer[pix] = static_cast<std::uint16_t>( floats[pix] );
 }
