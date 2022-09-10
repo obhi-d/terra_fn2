@@ -809,16 +809,22 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
 
     Vector3 sunLight = LIGHT_DIR.normalized() * ( 1.0f - AMBIENT_LIGHT ) + Vector3( AMBIENT_LIGHT );
 
-    int32_t noiseIdx = 0;
+    auto patchCount  = (size_t)buildData.heightmapSize[1] * (size_t)buildData.heightmapSize[0];
+    auto vertexCount = patchCount * 4;
+    auto indexCount  = patchCount * 6;
 
-    for( uint32_t y = 0; y < SIZE; y++ )
-    {
+    vertexData.resize( vertexCount );
+    indicies.resize( indexCount );
+    std::vector<int> ranges( (size_t)buildData.heightmapSize[1] );
+    std::iota( std::begin( ranges ), std::end( ranges ), 0 );
+
+    std::for_each( std::execution::par, ranges.begin(), ranges.end(), [&, STEP_X, STEP_Y]( int y ) {
         float yf = y + (float)buildData.pos.z();
 
         for( uint32_t x = 0; x < SIZE; x++ )
         {
-            float xf = x + (float)buildData.pos.x();
-
+            auto    noiseIdx = (size_t)y * (size_t)STEP_Y + (size_t)x;
+            float   xf       = x + buildData.pos.x();
             Vector3 v00( xf, densityValues[noiseIdx] * buildData.heightmapMultiplier, yf );
             Vector3 v01( xf, densityValues[noiseIdx + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
             Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X] * buildData.heightmapMultiplier, yf );
@@ -826,7 +832,6 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
 
             uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
 
-            // Normal for quad
             // Normal for quad
             Vector3 normal[4] = {};
             normal[0] += Math::cross( v10 - v11, v00 - v11 ).normalized();
@@ -836,25 +841,40 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
             normal[triRotation] += normal[3];
             normal[1] += normal[3];
 
-            uint32_t vertIdx = (uint32_t)vertexData.size();
-            vertexData.emplace_back( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ) );
-            vertexData.emplace_back( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ) );
-            vertexData.emplace_back( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ) );
-            vertexData.emplace_back( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ) );
+            uint32_t vertIdx     = (uint32_t)( (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 4;
+            auto     vertexStart = vertexData.data() + vertIdx;
+            auto     indexStart  = indicies.data() + ( (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 6;
+#ifdef HAS_TRUE_NORMAL
+            vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ), normal[0].normalized() );
+            vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ), normal[1].normalized() );
+            vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ), normal[2].normalized() );
+            vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ), normal[3].normalized() );
 
+#else
+
+#ifdef EQUAL_PREC
+            vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized() ) );
+            vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized() ) );
+            vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized() ) );
+            vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized() ) );
+#else
+            vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ) );
+            vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ) );
+            vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ) );
+            vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ) );
+#endif
+
+#endif
             // Slice quad along longest split
-            indicies.push_back( vertIdx );
-            indicies.push_back( vertIdx + 3 - triRotation );
-            indicies.push_back( vertIdx + 2 );
-            indicies.push_back( vertIdx + 3 );
-            indicies.push_back( vertIdx + triRotation );
-            indicies.push_back( vertIdx + 1 );
 
-            noiseIdx++;
+            indexStart[0] = ( vertIdx );
+            indexStart[1] = ( vertIdx + 3 - triRotation );
+            indexStart[2] = ( vertIdx + 2 );
+            indexStart[3] = ( vertIdx + 3 );
+            indexStart[4] = ( vertIdx + triRotation );
+            indexStart[5] = ( vertIdx + 1 );
         }
-
-        noiseIdx += STEP_X;
-    }
+    } );
 
     return MeshData( buildData.pos, minMax, vertexData, indicies );
 }
