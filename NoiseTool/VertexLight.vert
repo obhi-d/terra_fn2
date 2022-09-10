@@ -10,13 +10,13 @@
 
 // Uniform buffers */
 
-UniformLocation(0) uniform float heightMultiplier = 1.0;
-UniformLocation(2) uniform highp mat4 transformationProjectionMatrix  = mat4(1.0);
-UniformLocation(4) uniform vec3 sunDirection;
+UniformLocation(3) uniform vec2 heightMinMax = vec2(0.0f, 1.0f);
+UniformLocation(4) uniform highp mat4 transformationProjectionMatrix  = mat4(1.0);
+UniformLocation(6) uniform vec3 sunDirection;
 #ifdef EQUAL_PREC
-UniformLocation(5) uniform float compressSpec;
+UniformLocation(7) uniform float compressSpec;
 #else
-UniformLocation(5) uniform int compressSpec;
+UniformLocation(7) uniform int compressSpec;
 #endif
 
 
@@ -87,7 +87,7 @@ layout(location = 0) in highp vec4 positionLight;
 
 void main() 
 {
-    gl_Position = transformationProjectionMatrix * vec4(positionLight.x, positionLight.y * heightMultiplier, positionLight.z, 1.0);
+    gl_Position = transformationProjectionMatrix * vec4(positionLight.x, positionLight.y, positionLight.z, 1.0);
 #if defined(HAS_COMPRESSED_NORMALS) || defined(HAS_TRUE_NORMAL)
 #ifdef HAS_TRUE_NORMAL
     interpolatedNormal = normal.xyz;
@@ -98,7 +98,7 @@ void main()
     interpolatedNormal = i_octahedral_32(floatBitsToUint(positionLight.w), compressSpec);
 #endif
 #endif
-    height = positionLight.y;
+    height = (positionLight.y - heightMinMax.x) / (heightMinMax.y - heightMinMax.x);
 #else
     interpolatedLight.xy = positionLight.wy;
 #endif   

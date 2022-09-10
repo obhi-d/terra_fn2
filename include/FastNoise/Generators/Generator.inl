@@ -1,11 +1,15 @@
 #pragma once
+#include <algorithm>
+#include <cmath>
+#include <execution>
+#include <ranges>
+#include <thread>
 
 #include <cassert>
 #include <cstdint>
 #include <cstring>
 #include "FastSIMD/InlInclude.h"
 
-#include "BS_thread_pool.hpp"
 #include "Generator.h"
 
 #ifdef FS_SIMD_CLASS
@@ -18,7 +22,6 @@ template<typename FS>
 class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator
 {
     FASTSIMD_DECLARE_FS_TYPES;
-    inline static BS::thread_pool mJobPool;
 
 
 public:
@@ -220,11 +223,6 @@ public:
     };
 
 
-    static auto& GetJobPool()
-    {
-        return mJobPool;
-    }
-
     // Called with min/max computed
     virtual void Finalize( Context& ) const
     {
@@ -359,9 +357,7 @@ public:
         size_t blockCount                       = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
         size_t index                            = 0;
 
-        auto                           blocks = std::vector<std::pair<BlockTy, Output>>( blockCount );
-        std::vector<std::future<void>> results;
-        results.reserve( blockCount - 1 );
+        auto blocks = std::vector<std::pair<BlockTy, Output>>( blockCount );
         context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
 
         for( size_t b = 0; b < blockCount; ++b )
@@ -390,32 +386,12 @@ public:
                     }
                 }
             }
-
-            if constexpr( NoMultiThread )
-            {
-                GenBlock( params, uniform, input, output );
-                block.second.DoMinMax( input.nbValues );
-            }
-            else
-            {
-                if( b == blockCount - 1 )
-                {
-                    GenBlock( params, uniform, input, output );
-                    block.second.DoMinMax( input.nbValues );
-                }
-                else
-                {
-
-                    results.emplace_back( mJobPool.submit( [&, this]() {
-                        GenBlock( params, uniform, input, output );
-                        block.second.DoMinMax( input.nbValues );
-                    } ) );
-                }
-            }
         }
+        std::for_each( std::execution::par, blocks.begin(), blocks.end(), [&]( auto& block ) {
+            GenBlock( params, uniform, block.first, block.second );
+            block.second.DoMinMax( block.first.nbValues );
+        } );
 
-        for( auto& r: results )
-            r.wait();
         for( auto& b: blocks )
             context.minMax << b.second.minMax;
         context.output.resize( alignof( float32v ), totalValues );
@@ -458,11 +434,10 @@ public:
         xIdx += int32v::FS_Incremented();
         AxisReset<true>( xIdx, yIdx, xMax, xSizeV, xSize );
 
-        auto constexpr ModulatedVectorsPerBlock   = FS_Size_32() * VectorsPerBlock;
-        size_t                         blockCount = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
-        auto                           blocks     = std::vector<std::pair<BlockTy, Output>>( blockCount );
-        std::vector<std::future<void>> results;
-        results.reserve( blockCount - 1 );
+        auto constexpr ModulatedVectorsPerBlock = FS_Size_32() * VectorsPerBlock;
+        size_t blockCount                       = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
+        auto   blocks                           = std::vector<std::pair<BlockTy, Output>>( blockCount );
+
         context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
 
         for( size_t b = 0; b < blockCount; ++b )
@@ -487,23 +462,13 @@ public:
                 xIdx += int32v( FS_Size_32() );
                 AxisReset<false>( xIdx, yIdx, xMax, xSizeV, xSize );
             }
-            if( b == blockCount - 1 )
-            {
-                GenBlock( params, uniform, input, output );
-                block.second.DoMinMax( input.nbValues );
-            }
-            else
-            {
-                results.emplace_back(
-                    mJobPool.submit(
-                        [&, this]() {
-                            GenBlock( params, uniform, input, output );
-                            block.second.DoMinMax( input.nbValues );
-                        } ) );
-            }
         }
-        for( auto& r: results )
-            r.wait();
+
+        std::for_each( std::execution::par, blocks.begin(), blocks.end(), [&]( auto& block ) {
+            GenBlock( params, uniform, block.first, block.second );
+            block.second.DoMinMax( block.first.nbValues );
+        } );
+
         for( auto& b: blocks )
             context.minMax << b.second.minMax;
         Finalize( context );

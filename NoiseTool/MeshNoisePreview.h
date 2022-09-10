@@ -20,14 +20,14 @@
 #include "FastNoise/FastNoise.h"
 #include "MultiThreadQueues.h"
 
-// #define HAS_TRUE_NORMAL
+//#define HAS_TRUE_NORMAL
 
 namespace Magnum
 {
     class MeshNoisePreview
     {
     public:
-        static constexpr std::uint32_t MaxHeightmapColorMapRes = 1024;
+        static constexpr std::uint32_t MaxHeightmapColorMapRes = 512;
 
         MeshNoisePreview();
         ~MeshNoisePreview();
@@ -50,7 +50,8 @@ namespace Magnum
             "Heightmap 2D\0"
             "Heightmap Output Preview\0";
 
-        using ColorLayerValue = std::vector<std::tuple<Color3, float, bool>>;
+        using Color4x3        = std::array<Color4, 3>;
+        using ColorLayerValue = std::vector<std::tuple<Color4x3, bool>>;
 
         struct Voxel3D
         {
@@ -96,7 +97,7 @@ namespace Magnum
             VertexLightShader& SetSunIntensity( Color3 color, float intensity );
             VertexLightShader& SetSunDirection( Vector3 sunDir );
             VertexLightShader& SetHeightColorMap( ColorLayerValue const& colorMap );
-            VertexLightShader& SetHeightMultiplier( float iHeightMul );
+            VertexLightShader& SetHeightMinMax( float iHeightMin, float iHeightMax );
             VertexLightShader& SetRenderStyle( int spec );
 
         private:
@@ -109,14 +110,14 @@ namespace Magnum
             void       ContinueDefaultBuild( Type );
             GL::Shader CreateShader( GL::Version version, GL::Shader::Type type, Type iType );
 
-            GL::Texture1D mHeightColors;
+            GL::Texture1D mHeightColors[3];
 
-            int mHeightMultiplierUniform               = 0;
-            int mHeightColorMapUniform                 = 1;
-            int mTransformationProjectionMatrixUniform = 2;
-            int mSunColor                              = 3;
-            int mSunDirection                          = 4;
-            int mCompressSpec                          = 5;
+            int mHeightColorMapUniform[3]              = { 0, 1, 2 };
+            int mHeightMinMax                          = 3;
+            int mTransformationProjectionMatrixUniform = 4;
+            int mSunColor                              = 5;
+            int mSunDirection                          = 6;
+            int mCompressSpec                          = 7;
         };
 
         class Chunk
@@ -124,6 +125,7 @@ namespace Magnum
         public:
             struct VertexData
             {
+                VertexData() = default;
                 VertexData( Vector3 p, float c ) :
                     posLight( p, c )
                 {
