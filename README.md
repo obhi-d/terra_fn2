@@ -19,6 +19,6 @@ It compiles with C++20 (only tested on Windows).
 - Export multiple planes of terrain
 
 
-# Scrrenshot
+# Screenshot
 
 ![NoiseTool](example/snapshot.png)
