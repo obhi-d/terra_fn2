@@ -78,7 +78,8 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
         ImGui::PushItemWidth( 82.0f );
         bool edited = false;
 
-        edited |= ImGui::Combo( "Generation Type", reinterpret_cast<int*>( &mBuildData.generationType ), GenTypeStrings );
+        edited |=
+            ImGui::Combo( "Generation Type", reinterpret_cast<int*>( &mBuildData.generationType ), GenTypeStrings );
         edited |= ImGuiExtra::ScrollCombo( reinterpret_cast<int*>( &mBuildData.generationType ), GenType_Count );
 
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
@@ -175,7 +176,8 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
         ImGui::PushStyleColor( ImGuiCol_Button, 0 );
         ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0 );
         ImGui::PushStyleColor( ImGuiCol_ButtonHovered, 0 );
-        ImGuiIntegration::imageButton( mNoiseTexture, Vector2( mNoiseTexture.imageSize( 0 ) ), { {}, Vector2 { 1 } }, 0 );
+        ImGuiIntegration::imageButton( mNoiseTexture, Vector2( mNoiseTexture.imageSize( 0 ) ), { {}, Vector2 { 1 } },
+                                       0 );
         ImGui::PopStyleColor( 3 );
 
         if( ImGui::IsItemHovered() )
@@ -190,7 +192,8 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
                 mBuildData.offset.x() -= dragDelta.x();
                 mBuildData.offset.y() += dragDelta.y();
             }
-            else if( ( mBuildData.generationType == GenType_3D || mBuildData.generationType == GenType_4D ) && ImGui::IsMouseDragging( ImGuiMouseButton_Right ) )
+            else if( ( mBuildData.generationType == GenType_3D || mBuildData.generationType == GenType_4D ) &&
+                     ImGui::IsMouseDragging( ImGuiMouseButton_Right ) )
             {
                 Vector2 dragDelta( ImGui::GetMouseDragDelta( ImGuiMouseButton_Right ) );
                 ImGui::ResetMouseDragDelta( ImGuiMouseButton_Right );
@@ -269,7 +272,7 @@ void NoiseTexture::DoExportRAW()
 
             mExportThread = std::thread( [buildData = mExportBuildData, this]() {
                 auto const startOffset = buildData.offset;
-                auto       buffer      = std::vector<std::uint16_t>( buildData.size.x() * buildData.size.y() );
+                auto       buffer      = std::vector<std::int16_t>( buildData.size.x() * buildData.size.y() );
 
                 std::filesystem::path path = buildData.path.data();
                 std::error_code       ec;
@@ -282,7 +285,8 @@ void NoiseTexture::DoExportRAW()
                     for( int x = 0; x < buildData.numberOfPlanes.x(); ++x )
                     {
                         auto copy   = buildData;
-                        auto offset = buildData.offset + Magnum::Vector4( (float)x * buildData.size.x(), (float)y * buildData.size.y(), 0, 0 );
+                        auto offset = buildData.offset +
+                            Magnum::Vector4( (float)x * buildData.size.x(), (float)y * buildData.size.y(), 0, 0 );
 
                         copy.plane.x() = x;
                         copy.plane.y() = y;
@@ -290,12 +294,14 @@ void NoiseTexture::DoExportRAW()
                         BuildTerrainDataRAW( buffer, copy, offset );
 
                         std::string filename = buildData.name;
+                        filename += "_x";
                         filename += std::to_string( x );
-                        filename += 'x';
+                        filename += "_y";
                         filename += std::to_string( y );
                         filename += ".raw";
 
-                        std::ofstream file( path / filename, std::ofstream::binary | std::ofstream::out | std::ofstream::trunc );
+                        std::ofstream file( path / filename,
+                                            std::ofstream::binary | std::ofstream::out | std::ofstream::trunc );
                         file.write( reinterpret_cast<char*>( buffer.data() ), buffer.size() * 2 );
                         mExportProgress.fetch_add( step );
                     }
@@ -429,8 +435,7 @@ void NoiseTexture::DoExportBMP()
 void NoiseTexture::SetPreviewTexture( ImageView2D& imageView )
 {
     mNoiseTexture = GL::Texture2D();
-    mNoiseTexture.setStorage( 1, GL::TextureFormat::RGBA8, imageView.size() )
-        .setSubImage( 0, {}, imageView );
+    mNoiseTexture.setStorage( 1, GL::TextureFormat::RGBA8, imageView.size() ).setSubImage( 0, {}, imageView );
 }
 
 void NoiseTexture::ReGenerate( FastNoise::SmartNodeArg<> generator )
@@ -467,7 +472,7 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     auto gen = FastNoise::New<Wrapper>( buildData.generator->GetSIMDLevel() );
     gen->SetSource( buildData.generator );
 
-    auto context           = FastNoise::Generator::Context( noiseData, { (int)buildData.offset.x(), (int)buildData.offset.y() } );
+    auto context = FastNoise::Generator::Context( noiseData, { (int)buildData.offset.x(), (int)buildData.offset.y() } );
     context.planeId[0]     = buildData.plane.x();
     context.planeId[1]     = buildData.plane.y();
     context.totalPlanes[0] = buildData.numberOfPlanes.x();
@@ -477,30 +482,22 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     {
     case GenType_2D:
 
-        gen->GenUniformGrid2D( context,
-                               (int)offset.x(), (int)offset.y(),
-                               buildData.size.x(), buildData.size.y(),
+        gen->GenUniformGrid2D( context, (int)offset.x(), (int)offset.y(), buildData.size.x(), buildData.size.y(),
                                buildData.frequency, buildData.seed );
         break;
 
     case GenType_2DTiled:
-        gen->GenTileable2D( context,
-                            buildData.size.x(), buildData.size.y(),
-                            buildData.frequency, buildData.seed );
+        gen->GenTileable2D( context, buildData.size.x(), buildData.size.y(), buildData.frequency, buildData.seed );
         break;
 
     case GenType_3D:
-        gen->GenUniformGrid3D( context,
-                               (int)offset.x(), (int)offset.y(), (int)offset.z(),
-                               buildData.size.x(), buildData.size.y(), 1,
-                               buildData.frequency, buildData.seed );
+        gen->GenUniformGrid3D( context, (int)offset.x(), (int)offset.y(), (int)offset.z(), buildData.size.x(),
+                               buildData.size.y(), 1, buildData.frequency, buildData.seed );
         break;
 
     case GenType_4D:
-        gen->GenUniformGrid4D( context,
-                               (int)offset.x(), (int)offset.y(), (int)offset.z(), (int)offset.w(),
-                               buildData.size.x(), buildData.size.y(), 1, 1,
-                               buildData.frequency, buildData.seed );
+        gen->GenUniformGrid4D( context, (int)offset.x(), (int)offset.y(), (int)offset.z(), (int)offset.w(),
+                               buildData.size.x(), buildData.size.y(), 1, 1, buildData.frequency, buildData.seed );
         break;
     case GenType_Count:
         break;
@@ -509,15 +506,17 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     return TextureData( buildData.iteration, buildData.size, context.minMax, noiseData );
 }
 
-void NoiseTexture::BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData, Magnum::Vector4 offset )
+void NoiseTexture::BuildTerrainDataRAW( std::vector<std::int16_t>& buffer, const BuildData& buildData,
+                                        Magnum::Vector4 offset )
 {
     auto  data   = BuildTexture<FastNoise::ConvertRAW16>( buildData, offset );
     auto* floats = (float*)data.copy.begin();
     for( std::size_t pix = 0; pix < buffer.size(); ++pix )
-        buffer[pix] = static_cast<std::uint16_t>( floats[pix] );
+        buffer[pix] = static_cast<std::int16_t>( floats[pix] );
 }
 
-void NoiseTexture::GenerateLoopThread( GenerateQueue<BuildData>& generateQueue, CompleteQueue<TextureData>& completeQueue )
+void NoiseTexture::GenerateLoopThread( GenerateQueue<BuildData>&   generateQueue,
+                                       CompleteQueue<TextureData>& completeQueue )
 {
     while( true )
     {
@@ -550,8 +549,10 @@ void NoiseTexture::SetupSettingsHandlers()
         outBuf->appendf( "frequency=%f\n", noiseTexture->mBuildData.frequency );
         outBuf->appendf( "seed=%d\n", noiseTexture->mBuildData.seed );
         outBuf->appendf( "gen_type=%d\n", (int)noiseTexture->mBuildData.generationType );
-        outBuf->appendf( "export_size=%d:%d\n", noiseTexture->mExportBuildData.size.x(), noiseTexture->mExportBuildData.size.y() );
-        outBuf->appendf( "pane_size=%d:%d\n", noiseTexture->mExportBuildData.numberOfPlanes.x(), noiseTexture->mExportBuildData.numberOfPlanes.y() );
+        outBuf->appendf( "export_size=%d:%d\n", noiseTexture->mExportBuildData.size.x(),
+                         noiseTexture->mExportBuildData.size.y() );
+        outBuf->appendf( "pane_size=%d:%d\n", noiseTexture->mExportBuildData.numberOfPlanes.x(),
+                         noiseTexture->mExportBuildData.numberOfPlanes.y() );
         outBuf->appendf( "path=%s\n", noiseTexture->mExportBuildData.path.c_str() );
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
@@ -568,8 +569,10 @@ void NoiseTexture::SetupSettingsHandlers()
         sscanf( line, "frequency=%f", &noiseTexture->mBuildData.frequency );
         sscanf( line, "seed=%d", &noiseTexture->mBuildData.seed );
         sscanf( line, "gen_type=%d", (int*)&noiseTexture->mBuildData.generationType );
-        sscanf( line, "export_size=%d:%d", &noiseTexture->mExportBuildData.size.x(), &noiseTexture->mExportBuildData.size.y() );
-        sscanf( line, "plane_size=%d:%d", &noiseTexture->mExportBuildData.numberOfPlanes.x(), &noiseTexture->mExportBuildData.numberOfPlanes.y() );
+        sscanf( line, "export_size=%d:%d", &noiseTexture->mExportBuildData.size.x(),
+                &noiseTexture->mExportBuildData.size.y() );
+        sscanf( line, "plane_size=%d:%d", &noiseTexture->mExportBuildData.numberOfPlanes.x(),
+                &noiseTexture->mExportBuildData.numberOfPlanes.y() );
         char name[256] = {};
         sscanf( line, "path=%s", name );
         noiseTexture->mExportBuildData.path = name;

@@ -117,7 +117,7 @@ add_executable(NoiseTool
     ${NoiseTool_RESOURCES}
     "${NoiseTool_RESOURCES_DIR}/icon.rc"
     "ImGuiFileDialog.cpp"
-) 
+ "EditableHeightmap.cpp") 
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
 target_include_directories(NoiseTool PRIVATE 

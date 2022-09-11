@@ -1,5 +1,5 @@
 
-# FastNoise2 (fork)
+# FastNoise2 
 
 This is a fork to the amazing FastNoise2 library 
 
@@ -18,7 +18,5 @@ It compiles with C++20 (only tested on Windows).
 - Export in RAW format
 - Export multiple planes of terrain
 
-
-# Screenshot
 
 ![NoiseTool](example/snapshot.png)

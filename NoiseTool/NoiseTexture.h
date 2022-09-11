@@ -31,11 +31,10 @@ namespace Magnum
             GenType_Count
         };
 
-        inline static const char* GenTypeStrings =
-            "2D\0"
-            "2D Tiled\0"
-            "3D Slice\0"
-            "4D Slice\0";
+        inline static const char* GenTypeStrings = "2D\0"
+                                                   "2D Tiled\0"
+                                                   "3D Slice\0"
+                                                   "4D Slice\0";
 
         NoiseTexture();
         ~NoiseTexture();
@@ -86,7 +85,8 @@ namespace Magnum
             }
 
             TextureData( TextureData&& other ) :
-                copy( std::move( other.copy ) ), minMax( other.minMax ), size( other.size ), iteration( other.iteration )
+                copy( std::move( other.copy ) ), minMax( other.minMax ), size( other.size ),
+                iteration( other.iteration )
             {
                 textureData = { (uint32_t*)copy.begin(), copy.size };
             }
@@ -133,8 +133,10 @@ namespace Magnum
 
         template<typename Wrapper>
         static TextureData BuildTexture( const BuildData& buildData, Magnum::Vector4 offset );
-        static void        BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData, Magnum::Vector4 offset );
-        static void        GenerateLoopThread( GenerateQueue<BuildData>& generateQueue, CompleteQueue<TextureData>& completeQueue );
+        static void        BuildTerrainDataRAW( std::vector<std::int16_t>& buffer, const BuildData& buildData,
+                                                Magnum::Vector4 offset );
+        static void        GenerateLoopThread( GenerateQueue<BuildData>&   generateQueue,
+                                               CompleteQueue<TextureData>& completeQueue );
 
         void DoExport();
         void DoExportRAW();
