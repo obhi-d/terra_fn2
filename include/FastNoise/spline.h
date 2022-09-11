@@ -1,0 +1,1143 @@
+/*
+ * spline.h
+ *
+ * simple cubic spline interpolation library without external
+ * dependencies
+ *
+ * ---------------------------------------------------------------------
+ * Copyright (C) 2011, 2014, 2016, 2021 Tino Kluge (ttk448 at gmail.com)
+ *
+ *  This program is free software; you can redistribute it and/or
+ *  modify it under the terms of the GNU General Public License
+ *  as published by the Free Software Foundation; either version 2
+ *  of the License, or (at your option) any later version.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * ---------------------------------------------------------------------
+ *
+ */
+
+
+#ifndef TK_SPLINE_H
+#define TK_SPLINE_H
+
+#pragma warning( push )
+#pragma warning( disable : 4244 )
+
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstdio>
+#include <vector>
+
+#ifdef HAVE_SSTREAM
+#include <sstream>
+#include <string>
+#endif // HAVE_SSTREAM
+
+// not ideal but disable unused-function warnings
+// (we get them because we have implementations in the header file,
+// and this is because we want to be able to quickly separate them
+// into a cpp file if necessary)
+
+// unnamed namespace only because the implementation is in this
+// header file and we don't want to export symbols to the obj files
+namespace tk
+{
+
+    // spline interpolation
+    template<typename prec_type = float>
+    class spline
+    {
+    public:
+        // spline types
+        enum spline_type
+        {
+            linear          = 10, // linear interpolation
+            cspline         = 30, // cubic splines (classical C^2)
+            cspline_hermite = 31 // cubic hermite splines (local, only C^1)
+        };
+
+        // boundary condition type for the spline end-points
+        enum bd_type
+        {
+            first_deriv  = 1,
+            second_deriv = 2,
+            not_a_knot   = 3
+        };
+
+    protected:
+        std::vector<prec_type> m_x, m_y; // x,y coordinates of points
+        // interpolation parameters
+        // f(x) = a_i + b_i*(x-x_i) + c_i*(x-x_i)^2 + d_i*(x-x_i)^3
+        // where a_i = y_i, or else it won't go through grid points
+        std::vector<prec_type> m_b, m_c, m_d; // spline coefficients
+        prec_type              m_c0; // for left extrapolation
+        spline_type            m_type;
+        bd_type                m_left, m_right;
+        prec_type              m_left_value, m_right_value;
+        bool                   m_made_monotonic;
+
+
+        void   set_coeffs_from_b(); // calculate c_i, d_i from b_i
+        size_t find_closest( prec_type x ) const; // closest idx so that m_x[idx]<=x
+
+    public:
+        // default constructor: set boundary condition to be zero curvature
+        // at both ends, i.e. natural splines
+        spline() :
+            m_type( cspline ), m_left( second_deriv ), m_right( second_deriv ), m_left_value( 0.0 ),
+            m_right_value( 0.0 ), m_made_monotonic( false )
+        {
+            ;
+        }
+
+        spline( spline const& )                = default;
+        spline( spline&& ) noexcept            = default;
+        spline& operator=( spline const& )     = default;
+        spline& operator=( spline&& ) noexcept = default;
+
+        spline( const std::vector<prec_type>& X, const std::vector<prec_type>& Y, spline_type type = cspline,
+                bool make_monotonic = false, bd_type left = second_deriv, prec_type left_value = 0.0,
+                bd_type right = second_deriv, prec_type right_value = 0.0 ) :
+            m_type( type ),
+            m_left( left ), m_right( right ), m_left_value( left_value ), m_right_value( right_value ),
+            m_made_monotonic( false ) // false correct here: make_monotonic() sets it
+        {
+            this->set_points( X, Y, m_type );
+            if( make_monotonic )
+            {
+                this->make_monotonic();
+            }
+        }
+
+        inline bool operator==( spline const& other ) const noexcept
+        {
+            return m_type == other.m_type && m_left == other.m_left && m_right == other.m_right &&
+                m_left_value == other.m_left_value && m_right_value == other.m_right_value &&
+                m_made_monotonic == other.m_made_monotonic && m_x == other.m_x && m_y == other.m_y;
+        }
+
+        auto get_type() const
+        {
+            return m_type;
+        }
+
+        auto get_left_deriv() const
+        {
+            return m_left;
+        }
+
+        auto get_right_deriv() const
+        {
+            return m_right;
+        }
+
+        auto get_left_value() const
+        {
+            return m_left_value;
+        }
+
+        auto get_right_value() const
+        {
+            return m_right_value;
+        }
+
+        auto is_monotonic() const
+        {
+            return m_made_monotonic;
+        }
+
+        auto const& get_x() const
+        {
+            return m_x;
+        }
+
+        auto const& get_y() const
+        {
+            return m_y;
+        }
+
+        // modify boundary conditions: if called it must be before set_points()
+        void set_boundary( bd_type left, prec_type left_value, bd_type right, prec_type right_value );
+
+        // set all data points (cubic_spline=false means linear interpolation)
+        void set_points( const std::vector<prec_type>& x, const std::vector<prec_type>& y, spline_type type = cspline );
+
+        // adjust coefficients so that the spline becomes piecewise monotonic
+        // where possible
+        //   this is done by adjusting slopes at grid points by a non-negative
+        //   factor and this will break C^2
+        //   this can also break boundary conditions if adjustments need to
+        //   be made at the boundary points
+        // returns false if no adjustments have been made, true otherwise
+        bool make_monotonic();
+
+        // evaluates the spline at point x
+        prec_type operator()( prec_type x ) const;
+        prec_type deriv( int order, prec_type x ) const;
+
+        // solves for all x so that: spline(x) = y
+        std::vector<prec_type> solve( prec_type y, bool ignore_extrapolation = true ) const;
+
+        prec_type get_x_min() const
+        {
+            assert( !m_x.empty() );
+            return m_x.front();
+        }
+        prec_type get_x_max() const
+        {
+            assert( !m_x.empty() );
+            return m_x.back();
+        }
+
+#ifdef HAVE_SSTREAM
+        // spline info string, i.e. spline type, boundary conditions etc.
+        std::string info() const;
+#endif // HAVE_SSTREAM
+    };
+
+
+    namespace internal
+    {
+
+        // band matrix solver
+        template<typename prec_type = float>
+        class band_matrix
+        {
+        private:
+            std::vector<std::vector<prec_type>> m_upper; // upper band
+            std::vector<std::vector<prec_type>> m_lower; // lower band
+        public:
+            band_matrix() {}; // constructor
+            band_matrix( int dim, int n_u, int n_l ); // constructor
+            ~band_matrix() {}; // destructor
+            void resize( int dim, int n_u, int n_l ); // init with dim,n_u,n_l
+            int  dim() const; // matrix dimension
+            int  num_upper() const
+            {
+                return (int)m_upper.size() - 1;
+            }
+            int num_lower() const
+            {
+                return (int)m_lower.size() - 1;
+            }
+            // access operator
+            prec_type& operator()( int i, int j ); // write
+            prec_type  operator()( int i, int j ) const; // read
+            // we can store an additional diagonal (in m_lower)
+            prec_type&             saved_diag( int i );
+            prec_type              saved_diag( int i ) const;
+            void                   lu_decompose();
+            std::vector<prec_type> r_solve( const std::vector<prec_type>& b ) const;
+            std::vector<prec_type> l_solve( const std::vector<prec_type>& b ) const;
+            std::vector<prec_type> lu_solve( const std::vector<prec_type>& b, bool is_lu_decomposed = false );
+        };
+
+        template<typename prec_type = float>
+        constexpr prec_type eps =
+            // return std::numeric_limits<prec_type>::epsilon();    // __DBL_EPSILON__
+            static_cast<prec_type>( 2.2204460492503131e-16 ); // 2^-52
+
+
+        template<typename prec_type = float>
+        constexpr prec_type pi = static_cast<prec_type>( 3.141592653589793238 );
+
+        template<typename prec_type = float>
+        std::vector<prec_type> solve_cubic( prec_type a, prec_type b, prec_type c, prec_type d, int newton_iter = 0 );
+
+    } // namespace internal
+
+
+    // ---------------------------------------------------------------------
+    // implementation part, which could be separated into a cpp file
+    // ---------------------------------------------------------------------
+
+    // spline implementation
+    // -----------------------
+
+    template<typename prec_type>
+    void spline<prec_type>::set_boundary( spline<prec_type>::bd_type left, prec_type left_value,
+                                          spline<prec_type>::bd_type right, prec_type right_value )
+    {
+        assert( m_x.size() == 0 ); // set_points() must not have happened yet
+        m_left        = left;
+        m_right       = right;
+        m_left_value  = left_value;
+        m_right_value = right_value;
+    }
+
+    template<typename prec_type>
+    void spline<prec_type>::set_coeffs_from_b()
+    {
+        assert( m_x.size() == m_y.size() );
+        assert( m_x.size() == m_b.size() );
+        assert( m_x.size() > 2 );
+        size_t n = m_b.size();
+        if( m_c.size() != n )
+            m_c.resize( n );
+        if( m_d.size() != n )
+            m_d.resize( n );
+
+        for( size_t i = 0; i < n - 1; i++ )
+        {
+            const prec_type h = m_x[i + 1] - m_x[i];
+            // from continuity and differentiability condition
+            m_c[i] = ( 3.0 * ( m_y[i + 1] - m_y[i] ) / h - ( 2.0 * m_b[i] + m_b[i + 1] ) ) / h;
+            // from differentiability condition
+            m_d[i] = ( ( m_b[i + 1] - m_b[i] ) / ( 3.0 * h ) - 2.0 / 3.0 * m_c[i] ) / h;
+        }
+
+        // for left extrapolation coefficients
+        m_c0 = ( m_left == first_deriv ) ? 0.0 : m_c[0];
+    }
+
+    template<typename prec_type>
+    void spline<prec_type>::set_points( const std::vector<prec_type>& x, const std::vector<prec_type>& y,
+                                        spline_type type )
+    {
+        assert( x.size() == y.size() );
+        assert( x.size() >= 3 );
+        // not-a-knot with 3 points has many solutions
+        if( m_left == not_a_knot || m_right == not_a_knot )
+            assert( x.size() >= 4 );
+        m_type           = type;
+        m_made_monotonic = false;
+        m_x              = x;
+        m_y              = y;
+        int n            = (int)x.size();
+        // check strict monotonicity of input vector x
+        for( int i = 0; i < n - 1; i++ )
+        {
+            assert( m_x[i] < m_x[i + 1] );
+        }
+
+
+        if( type == linear )
+        {
+            // linear interpolation
+            m_d.resize( n );
+            m_c.resize( n );
+            m_b.resize( n );
+            for( int i = 0; i < n - 1; i++ )
+            {
+                m_d[i] = 0.0;
+                m_c[i] = 0.0;
+                m_b[i] = ( m_y[i + 1] - m_y[i] ) / ( m_x[i + 1] - m_x[i] );
+            }
+            // ignore boundary conditions, set slope equal to the last segment
+            m_b[n - 1] = m_b[n - 2];
+            m_c[n - 1] = 0.0;
+            m_d[n - 1] = 0.0;
+        }
+        else if( type == cspline )
+        {
+            // classical cubic splines which are C^2 (twice cont differentiable)
+            // this requires solving an equation system
+
+            // setting up the matrix and right hand side of the equation system
+            // for the parameters b[]
+            int                    n_upper = ( m_left == spline<prec_type>::not_a_knot ) ? 2 : 1;
+            int                    n_lower = ( m_right == spline<prec_type>::not_a_knot ) ? 2 : 1;
+            internal::band_matrix  A( n, n_upper, n_lower );
+            std::vector<prec_type> rhs( n );
+            for( int i = 1; i < n - 1; i++ )
+            {
+                A( i, i - 1 ) = 1.0 / 3.0 * ( x[i] - x[i - 1] );
+                A( i, i )     = 2.0 / 3.0 * ( x[i + 1] - x[i - 1] );
+                A( i, i + 1 ) = 1.0 / 3.0 * ( x[i + 1] - x[i] );
+                rhs[i]        = ( y[i + 1] - y[i] ) / ( x[i + 1] - x[i] ) - ( y[i] - y[i - 1] ) / ( x[i] - x[i - 1] );
+            }
+            // boundary conditions
+            if( m_left == spline<prec_type>::second_deriv )
+            {
+                // 2*c[0] = f''
+                A( 0, 0 ) = 2.0;
+                A( 0, 1 ) = 0.0;
+                rhs[0]    = m_left_value;
+            }
+            else if( m_left == spline<prec_type>::first_deriv )
+            {
+                // b[0] = f', needs to be re-expressed in terms of c:
+                // (2c[0]+c[1])(x[1]-x[0]) = 3 ((y[1]-y[0])/(x[1]-x[0]) - f')
+                A( 0, 0 ) = 2.0 * ( x[1] - x[0] );
+                A( 0, 1 ) = 1.0 * ( x[1] - x[0] );
+                rhs[0]    = 3.0 * ( ( y[1] - y[0] ) / ( x[1] - x[0] ) - m_left_value );
+            }
+            else if( m_left == spline<prec_type>::not_a_knot )
+            {
+                // f'''(x[1]) exists, i.e. d[0]=d[1], or re-expressed in c:
+                // -h1*c[0] + (h0+h1)*c[1] - h0*c[2] = 0
+                A( 0, 0 ) = -( x[2] - x[1] );
+                A( 0, 1 ) = x[2] - x[0];
+                A( 0, 2 ) = -( x[1] - x[0] );
+                rhs[0]    = 0.0;
+            }
+            else
+            {
+                assert( false );
+            }
+            if( m_right == spline<prec_type>::second_deriv )
+            {
+                // 2*c[n-1] = f''
+                A( n - 1, n - 1 ) = 2.0;
+                A( n - 1, n - 2 ) = 0.0;
+                rhs[n - 1]        = m_right_value;
+            }
+            else if( m_right == spline<prec_type>::first_deriv )
+            {
+                // b[n-1] = f', needs to be re-expressed in terms of c:
+                // (c[n-2]+2c[n-1])(x[n-1]-x[n-2])
+                // = 3 (f' - (y[n-1]-y[n-2])/(x[n-1]-x[n-2]))
+                A( n - 1, n - 1 ) = 2.0 * ( x[n - 1] - x[n - 2] );
+                A( n - 1, n - 2 ) = 1.0 * ( x[n - 1] - x[n - 2] );
+                rhs[n - 1]        = 3.0 * ( m_right_value - ( y[n - 1] - y[n - 2] ) / ( x[n - 1] - x[n - 2] ) );
+            }
+            else if( m_right == spline<prec_type>::not_a_knot )
+            {
+                // f'''(x[n-2]) exists, i.e. d[n-3]=d[n-2], or re-expressed in c:
+                // -h_{n-2}*c[n-3] + (h_{n-3}+h_{n-2})*c[n-2] - h_{n-3}*c[n-1] = 0
+                A( n - 1, n - 3 ) = -( x[n - 1] - x[n - 2] );
+                A( n - 1, n - 2 ) = x[n - 1] - x[n - 3];
+                A( n - 1, n - 1 ) = -( x[n - 2] - x[n - 3] );
+                rhs[0]            = 0.0;
+            }
+            else
+            {
+                assert( false );
+            }
+
+            // solve the equation system to obtain the parameters c[]
+            m_c = A.lu_solve( rhs );
+
+            // calculate parameters b[] and d[] based on c[]
+            m_d.resize( n );
+            m_b.resize( n );
+            for( int i = 0; i < n - 1; i++ )
+            {
+                m_d[i] = 1.0 / 3.0 * ( m_c[i + 1] - m_c[i] ) / ( x[i + 1] - x[i] );
+                m_b[i] = ( y[i + 1] - y[i] ) / ( x[i + 1] - x[i] ) -
+                    1.0 / 3.0 * ( 2.0 * m_c[i] + m_c[i + 1] ) * ( x[i + 1] - x[i] );
+            }
+            // for the right extrapolation coefficients (zero cubic term)
+            // f_{n-1}(x) = y_{n-1} + b*(x-x_{n-1}) + c*(x-x_{n-1})^2
+            prec_type h = x[n - 1] - x[n - 2];
+            // m_c[n-1] is determined by the boundary condition
+            m_d[n - 1] = 0.0;
+            m_b[n - 1] = 3.0 * m_d[n - 2] * h * h + 2.0 * m_c[n - 2] * h + m_b[n - 2]; // = f'_{n-2}(x_{n-1})
+            if( m_right == first_deriv )
+                m_c[n - 1] = 0.0; // force linear extrapolation
+        }
+        else if( type == cspline_hermite )
+        {
+            // hermite cubic splines which are C^1 (cont. differentiable)
+            // and derivatives are specified on each grid point
+            // (here we use 3-point finite differences)
+            m_b.resize( n );
+            m_c.resize( n );
+            m_d.resize( n );
+            // set b to match 1st order derivative finite difference
+            for( int i = 1; i < n - 1; i++ )
+            {
+                const prec_type h  = m_x[i + 1] - m_x[i];
+                const prec_type hl = m_x[i] - m_x[i - 1];
+                m_b[i]             = -h / ( hl * ( hl + h ) ) * m_y[i - 1] + ( h - hl ) / ( hl * h ) * m_y[i] +
+                    hl / ( h * ( hl + h ) ) * m_y[i + 1];
+            }
+            // boundary conditions determine b[0] and b[n-1]
+            if( m_left == first_deriv )
+            {
+                m_b[0] = m_left_value;
+            }
+            else if( m_left == second_deriv )
+            {
+                const prec_type h = m_x[1] - m_x[0];
+                m_b[0]            = 0.5 * ( -m_b[1] - 0.5 * m_left_value * h + 3.0 * ( m_y[1] - m_y[0] ) / h );
+            }
+            else if( m_left == not_a_knot )
+            {
+                // f''' continuous at x[1]
+                const prec_type h0 = m_x[1] - m_x[0];
+                const prec_type h1 = m_x[2] - m_x[1];
+                m_b[0]             = -m_b[1] + 2.0 * ( m_y[1] - m_y[0] ) / h0 +
+                    h0 * h0 / ( h1 * h1 ) * ( m_b[1] + m_b[2] - 2.0 * ( m_y[2] - m_y[1] ) / h1 );
+            }
+            else
+            {
+                assert( false );
+            }
+            if( m_right == first_deriv )
+            {
+                m_b[n - 1] = m_right_value;
+                m_c[n - 1] = 0.0;
+            }
+            else if( m_right == second_deriv )
+            {
+                const prec_type h = m_x[n - 1] - m_x[n - 2];
+                m_b[n - 1] = 0.5 * ( -m_b[n - 2] + 0.5 * m_right_value * h + 3.0 * ( m_y[n - 1] - m_y[n - 2] ) / h );
+                m_c[n - 1] = 0.5 * m_right_value;
+            }
+            else if( m_right == not_a_knot )
+            {
+                // f''' continuous at x[n-2]
+                const prec_type h0 = m_x[n - 2] - m_x[n - 3];
+                const prec_type h1 = m_x[n - 1] - m_x[n - 2];
+                m_b[n - 1]         = -m_b[n - 2] + 2.0 * ( m_y[n - 1] - m_y[n - 2] ) / h1 +
+                    h1 * h1 / ( h0 * h0 ) * ( m_b[n - 3] + m_b[n - 2] - 2.0 * ( m_y[n - 2] - m_y[n - 3] ) / h0 );
+                // f'' continuous at x[n-1]: c[n-1] = 3*d[n-2]*h[n-2] + c[n-1]
+                m_c[n - 1] = ( m_b[n - 2] + 2.0 * m_b[n - 1] ) / h1 - 3.0 * ( m_y[n - 1] - m_y[n - 2] ) / ( h1 * h1 );
+            }
+            else
+            {
+                assert( false );
+            }
+            m_d[n - 1] = 0.0;
+
+            // parameters c and d are determined by continuity and differentiability
+            set_coeffs_from_b();
+        }
+        else
+        {
+            assert( false );
+        }
+
+        // for left extrapolation coefficients
+        m_c0 = ( m_left == first_deriv ) ? 0.0 : m_c[0];
+    }
+
+    template<typename prec_type>
+    bool spline<prec_type>::make_monotonic()
+    {
+        assert( m_x.size() == m_y.size() );
+        assert( m_x.size() == m_b.size() );
+        assert( m_x.size() > 2 );
+        bool      modified = false;
+        const int n        = (int)m_x.size();
+        // make sure: input data monotonic increasing --> b_i>=0
+        //            input data monotonic decreasing --> b_i<=0
+        for( int i = 0; i < n; i++ )
+        {
+            int im1 = std::max( i - 1, 0 );
+            int ip1 = std::min( i + 1, n - 1 );
+            if( ( ( m_y[im1] <= m_y[i] ) && ( m_y[i] <= m_y[ip1] ) && m_b[i] < 0.0 ) ||
+                ( ( m_y[im1] >= m_y[i] ) && ( m_y[i] >= m_y[ip1] ) && m_b[i] > 0.0 ) )
+            {
+                modified = true;
+                m_b[i]   = 0.0;
+            }
+        }
+        // if input data is monotonic (b[i], b[i+1], avg have all the same sign)
+        // ensure a sufficient criteria for monotonicity is satisfied:
+        //     std::sqrt(b[i]^2+b[i+1]^2) <= 3 |avg|, with avg=(y[i+1]-y[i])/h,
+        for( int i = 0; i < n - 1; i++ )
+        {
+            prec_type h   = m_x[i + 1] - m_x[i];
+            prec_type avg = ( m_y[i + 1] - m_y[i] ) / h;
+            if( avg == 0.0 && ( m_b[i] != 0.0 || m_b[i + 1] != 0.0 ) )
+            {
+                modified   = true;
+                m_b[i]     = 0.0;
+                m_b[i + 1] = 0.0;
+            }
+            else if( ( m_b[i] >= 0.0 && m_b[i + 1] >= 0.0 && avg > 0.0 ) ||
+                     ( m_b[i] <= 0.0 && m_b[i + 1] <= 0.0 && avg < 0.0 ) )
+            {
+                // input data is monotonic
+                prec_type r = std::sqrt( m_b[i] * m_b[i] + m_b[i + 1] * m_b[i + 1] ) / std::fabs( avg );
+                if( r > 3.0 )
+                {
+                    // sufficient criteria for monotonicity: r<=3
+                    // adjust b[i] and b[i+1]
+                    modified = true;
+                    m_b[i] *= ( 3.0 / r );
+                    m_b[i + 1] *= ( 3.0 / r );
+                }
+            }
+        }
+
+        if( modified == true )
+        {
+            set_coeffs_from_b();
+            m_made_monotonic = true;
+        }
+
+        return modified;
+    }
+
+    template<typename prec_type>
+    // return the closest idx so that m_x[idx] <= x (return 0 if x<m_x[0])
+    size_t spline<prec_type>::find_closest( prec_type x ) const
+    {
+        typename std::vector<prec_type>::const_iterator it;
+        it         = std::upper_bound( m_x.begin(), m_x.end(), x ); // *it > x
+        size_t idx = std::max( int( it - m_x.begin() ) - 1, 0 ); // m_x[idx] <= x
+        return idx;
+    }
+
+    template<typename prec_type>
+    prec_type spline<prec_type>::operator()( prec_type x ) const
+    {
+        // polynomial evaluation using Horner's scheme
+        // TODO: consider more numerically accurate algorithms, e.g.:
+        //   - Clenshaw
+        //   - Even-Odd method by A.C.R. Newbery
+        //   - Compensated Horner Scheme
+        size_t n   = m_x.size();
+        size_t idx = find_closest( x );
+
+        prec_type h = x - m_x[idx];
+        prec_type interpol;
+        if( x < m_x[0] )
+        {
+            // extrapolation to the left
+            interpol = ( m_c0 * h + m_b[0] ) * h + m_y[0];
+        }
+        else if( x > m_x[n - 1] )
+        {
+            // extrapolation to the right
+            interpol = ( m_c[n - 1] * h + m_b[n - 1] ) * h + m_y[n - 1];
+        }
+        else
+        {
+            // interpolation
+            interpol = ( ( m_d[idx] * h + m_c[idx] ) * h + m_b[idx] ) * h + m_y[idx];
+        }
+        return interpol;
+    }
+
+    template<typename prec_type>
+    prec_type spline<prec_type>::deriv( int order, prec_type x ) const
+    {
+        assert( order > 0 );
+        size_t n   = m_x.size();
+        size_t idx = find_closest( x );
+
+        prec_type h = x - m_x[idx];
+        prec_type interpol;
+        if( x < m_x[0] )
+        {
+            // extrapolation to the left
+            switch( order )
+            {
+            case 1:
+                interpol = 2.0 * m_c0 * h + m_b[0];
+                break;
+            case 2:
+                interpol = 2.0 * m_c0;
+                break;
+            default:
+                interpol = 0.0;
+                break;
+            }
+        }
+        else if( x > m_x[n - 1] )
+        {
+            // extrapolation to the right
+            switch( order )
+            {
+            case 1:
+                interpol = 2.0 * m_c[n - 1] * h + m_b[n - 1];
+                break;
+            case 2:
+                interpol = 2.0 * m_c[n - 1];
+                break;
+            default:
+                interpol = 0.0;
+                break;
+            }
+        }
+        else
+        {
+            // interpolation
+            switch( order )
+            {
+            case 1:
+                interpol = ( 3.0 * m_d[idx] * h + 2.0 * m_c[idx] ) * h + m_b[idx];
+                break;
+            case 2:
+                interpol = 6.0 * m_d[idx] * h + 2.0 * m_c[idx];
+                break;
+            case 3:
+                interpol = 6.0 * m_d[idx];
+                break;
+            default:
+                interpol = 0.0;
+                break;
+            }
+        }
+        return interpol;
+    }
+
+    template<typename prec_type>
+    std::vector<prec_type> spline<prec_type>::solve( prec_type y, bool ignore_extrapolation ) const
+    {
+        std::vector<prec_type> x; // roots for the entire spline
+        std::vector<prec_type> root; // roots for each piecewise cubic
+        const size_t           n = m_x.size();
+
+        // left extrapolation
+        if( ignore_extrapolation == false )
+        {
+            root = internal::solve_cubic( m_y[0] - y, m_b[0], m_c0, 0.0, 1 );
+            for( size_t j = 0; j < root.size(); j++ )
+            {
+                if( root[j] < 0.0 )
+                {
+                    x.push_back( m_x[0] + root[j] );
+                }
+            }
+        }
+
+        // brute force check if piecewise cubic has roots in their resp. segment
+        // TODO: make more efficient
+        for( size_t i = 0; i < n - 1; i++ )
+        {
+            root = internal::solve_cubic( m_y[i] - y, m_b[i], m_c[i], m_d[i], 1 );
+            for( size_t j = 0; j < root.size(); j++ )
+            {
+                prec_type h   = ( i > 0 ) ? ( m_x[i] - m_x[i - 1] ) : 0.0;
+                prec_type eps = internal::eps<prec_type> * 512.0 * std::min( h, 1.0 );
+                if( ( -eps <= root[j] ) && ( root[j] < m_x[i + 1] - m_x[i] ) )
+                {
+                    prec_type new_root = m_x[i] + root[j];
+                    if( x.size() > 0 && x.back() + eps > new_root )
+                    {
+                        x.back() = new_root; // avoid spurious duplicate roots
+                    }
+                    else
+                    {
+                        x.push_back( new_root );
+                    }
+                }
+            }
+        }
+
+        // right extrapolation
+        if( ignore_extrapolation == false )
+        {
+            root = internal::solve_cubic( m_y[n - 1] - y, m_b[n - 1], m_c[n - 1], 0.0, 1 );
+            for( size_t j = 0; j < root.size(); j++ )
+            {
+                if( 0.0 <= root[j] )
+                {
+                    x.push_back( m_x[n - 1] + root[j] );
+                }
+            }
+        }
+
+        return x;
+    };
+
+
+#ifdef HAVE_SSTREAM
+    template<typename prec_type>
+    std::string spline<prec_type>::info() const
+    {
+        std::stringstream ss;
+        ss << "type " << m_type << ", left boundary deriv " << m_left << " = ";
+        ss << m_left_value << ", right boundary deriv " << m_right << " = ";
+        ss << m_right_value << std::endl;
+        if( m_made_monotonic )
+        {
+            ss << "(spline has been adjusted for piece-wise monotonicity)";
+        }
+        return ss.str();
+    }
+#endif // HAVE_SSTREAM
+
+
+    namespace internal
+    {
+
+        // band_matrix implementation
+        // -------------------------
+
+        template<typename prec_type>
+        band_matrix<prec_type>::band_matrix( int dim, int n_u, int n_l )
+        {
+            resize( dim, n_u, n_l );
+        }
+
+        template<typename prec_type>
+        void band_matrix<prec_type>::resize( int dim, int n_u, int n_l )
+        {
+            assert( dim > 0 );
+            assert( n_u >= 0 );
+            assert( n_l >= 0 );
+            m_upper.resize( n_u + 1 );
+            m_lower.resize( n_l + 1 );
+            for( size_t i = 0; i < m_upper.size(); i++ )
+            {
+                m_upper[i].resize( dim );
+            }
+            for( size_t i = 0; i < m_lower.size(); i++ )
+            {
+                m_lower[i].resize( dim );
+            }
+        }
+
+        template<typename prec_type>
+        int band_matrix<prec_type>::dim() const
+        {
+            if( m_upper.size() > 0 )
+            {
+                return (int)m_upper[0].size();
+            }
+            else
+            {
+                return 0;
+            }
+        }
+
+        template<typename prec_type>
+        // defines the new operator (), so that we can access the elements
+        // by A(i,j), index going from i=0,...,dim()-1
+        prec_type& band_matrix<prec_type>::operator()( int i, int j )
+        {
+            int k = j - i; // what band is the entry
+            assert( ( i >= 0 ) && ( i < dim() ) && ( j >= 0 ) && ( j < dim() ) );
+            assert( ( -num_lower() <= k ) && ( k <= num_upper() ) );
+            // k=0 -> diagonal, k<0 lower left part, k>0 upper right part
+            if( k >= 0 )
+                return m_upper[k][i];
+            else
+                return m_lower[-k][i];
+        }
+
+        template<typename prec_type>
+        prec_type band_matrix<prec_type>::operator()( int i, int j ) const
+        {
+            int k = j - i; // what band is the entry
+            assert( ( i >= 0 ) && ( i < dim() ) && ( j >= 0 ) && ( j < dim() ) );
+            assert( ( -num_lower() <= k ) && ( k <= num_upper() ) );
+            // k=0 -> diagonal, k<0 lower left part, k>0 upper right part
+            if( k >= 0 )
+                return m_upper[k][i];
+            else
+                return m_lower[-k][i];
+        }
+
+        template<typename prec_type>
+        // second diag (used in LU decomposition), saved in m_lower
+        prec_type band_matrix<prec_type>::saved_diag( int i ) const
+        {
+            assert( ( i >= 0 ) && ( i < dim() ) );
+            return m_lower[0][i];
+        }
+
+        template<typename prec_type>
+        prec_type& band_matrix<prec_type>::saved_diag( int i )
+        {
+            assert( ( i >= 0 ) && ( i < dim() ) );
+            return m_lower[0][i];
+        }
+
+        template<typename prec_type>
+        // LR-Decomposition of a band matrix
+        void band_matrix<prec_type>::lu_decompose()
+        {
+            int       i_max, j_max;
+            int       j_min;
+            prec_type x;
+
+            // preconditioning
+            // normalize column i so that a_ii=1
+            for( int i = 0; i < this->dim(); i++ )
+            {
+                assert( this->operator()( i, i ) != 0.0 );
+                this->saved_diag( i ) = 1.0 / this->operator()( i, i );
+                j_min                 = std::max( 0, i - this->num_lower() );
+                j_max                 = std::min( this->dim() - 1, i + this->num_upper() );
+                for( int j = j_min; j <= j_max; j++ )
+                {
+                    this->operator()( i, j ) *= this->saved_diag( i );
+                }
+                this->operator()( i, i ) = 1.0; // prevents rounding errors
+            }
+
+            // Gauss LR-Decomposition
+            for( int k = 0; k < this->dim(); k++ )
+            {
+                i_max = std::min( this->dim() - 1, k + this->num_lower() ); // num_lower not a mistake!
+                for( int i = k + 1; i <= i_max; i++ )
+                {
+                    assert( this->operator()( k, k ) != 0.0 );
+                    x = -this->operator()( i, k ) / this->operator()( k, k );
+                    this->                                operator()( i, k ) = -x; // assembly part of L
+                    j_max = std::min( this->dim() - 1, k + this->num_upper() );
+                    for( int j = k + 1; j <= j_max; j++ )
+                    {
+                        // assembly part of R
+                        this->operator()( i, j ) = this->operator()( i, j ) + x * this->operator()( k, j );
+                    }
+                }
+            }
+        }
+
+        template<typename prec_type>
+        // solves Ly=b
+        std::vector<prec_type> band_matrix<prec_type>::l_solve( const std::vector<prec_type>& b ) const
+        {
+            assert( this->dim() == (int)b.size() );
+            std::vector<prec_type> x( this->dim() );
+            int                    j_start;
+            prec_type              sum;
+            for( int i = 0; i < this->dim(); i++ )
+            {
+                sum     = 0;
+                j_start = std::max( 0, i - this->num_lower() );
+                for( int j = j_start; j < i; j++ )
+                    sum += this->operator()( i, j ) * x[j];
+                x[i] = ( b[i] * this->saved_diag( i ) ) - sum;
+            }
+            return x;
+        }
+
+        template<typename prec_type>
+        // solves Rx=y
+        std::vector<prec_type> band_matrix<prec_type>::r_solve( const std::vector<prec_type>& b ) const
+        {
+            assert( this->dim() == (int)b.size() );
+            std::vector<prec_type> x( this->dim() );
+            int                    j_stop;
+            prec_type              sum;
+            for( int i = this->dim() - 1; i >= 0; i-- )
+            {
+                sum    = 0;
+                j_stop = std::min( this->dim() - 1, i + this->num_upper() );
+                for( int j = i + 1; j <= j_stop; j++ )
+                    sum += this->operator()( i, j ) * x[j];
+                x[i] = ( b[i] - sum ) / this->operator()( i, i );
+            }
+            return x;
+        }
+
+        template<typename prec_type>
+        std::vector<prec_type> band_matrix<prec_type>::lu_solve( const std::vector<prec_type>& b,
+                                                                 bool                          is_lu_decomposed )
+        {
+            assert( this->dim() == (int)b.size() );
+            std::vector<prec_type> x, y;
+            if( is_lu_decomposed == false )
+            {
+                this->lu_decompose();
+            }
+            y = this->l_solve( b );
+            x = this->r_solve( y );
+            return x;
+        }
+
+
+        template<typename prec_type>
+        // solutions for a + b*x = 0
+        std::vector<prec_type> solve_linear( prec_type a, prec_type b )
+        {
+            std::vector<prec_type> x; // roots
+            if( b == 0.0 )
+            {
+                if( a == 0.0 )
+                {
+                    // 0*x = 0
+                    x.resize( 1 );
+                    x[0] = 0.0; // any x solves it but we need to pick one
+                    return x;
+                }
+                else
+                {
+                    // 0*x + ... = 0, no solution
+                    return x;
+                }
+            }
+            else
+            {
+                x.resize( 1 );
+                x[0] = -a / b;
+                return x;
+            }
+        }
+
+        template<typename prec_type>
+        // solutions for a + b*x + c*x^2 = 0
+        std::vector<prec_type> solve_quadratic( prec_type a, prec_type b, prec_type c, int newton_iter = 0 )
+        {
+            if( c == 0.0 )
+            {
+                return solve_linear( a, b );
+            }
+            // rescale so that we solve x^2 + 2p x + q = (x+p)^2 + q - p^2 = 0
+            prec_type       p         = 0.5 * b / c;
+            prec_type       q         = a / c;
+            prec_type       discr     = p * p - q;
+            const prec_type eps       = 0.5 * internal::eps<prec_type>;
+            prec_type       discr_err = ( 6.0 * ( p * p ) + 3.0 * std::fabs( q ) + std::fabs( discr ) ) * eps;
+
+            std::vector<prec_type> x; // roots
+            if( std::fabs( discr ) <= discr_err )
+            {
+                // discriminant is zero --> one root
+                x.resize( 1 );
+                x[0] = -p;
+            }
+            else if( discr < 0 )
+            {
+                // no root
+            }
+            else
+            {
+                // two roots
+                x.resize( 2 );
+                x[0] = -p - std::sqrt( discr );
+                x[1] = -p + std::sqrt( discr );
+            }
+
+            // improve solution via newton steps
+            for( size_t i = 0; i < x.size(); i++ )
+            {
+                for( int k = 0; k < newton_iter; k++ )
+                {
+                    prec_type f  = ( c * x[i] + b ) * x[i] + a;
+                    prec_type f1 = 2.0 * c * x[i] + b;
+                    // only adjust if slope is large enough
+                    if( std::fabs( f1 ) > 1e-8 )
+                    {
+                        x[i] -= f / f1;
+                    }
+                }
+            }
+
+            return x;
+        }
+
+        template<typename prec_type>
+        // solutions for the cubic equation: a + b*x +c*x^2 + d*x^3 = 0
+        // this is a naive implementation of the analytic solution without
+        // optimisation for speed or numerical accuracy
+        // newton_iter: number of newton iterations to improve analytical solution
+        // see also
+        //   gsl: gsl_poly_solve_cubic() in solve_cubic.c
+        //   octave: roots.m - via eigenvalues of the Frobenius companion matrix
+        std::vector<prec_type> solve_cubic( prec_type a, prec_type b, prec_type c, prec_type d, int newton_iter )
+        {
+            if( d == 0.0 )
+            {
+                return solve_quadratic( a, b, c, newton_iter );
+            }
+
+            // convert to normalised form: a + bx + cx^2 + x^3 = 0
+            if( d != 1.0 )
+            {
+                a /= d;
+                b /= d;
+                c /= d;
+            }
+
+            // convert to depressed cubic: z^3 - 3pz - 2q = 0
+            // via substitution: z = x + c/3
+            std::vector<prec_type> z; // roots of the depressed cubic
+            prec_type              p     = -( 1.0 / 3.0 ) * b + ( 1.0 / 9.0 ) * ( c * c );
+            prec_type              r     = 2.0 * ( c * c ) - 9.0 * b;
+            prec_type              q     = -0.5 * a - ( 1.0 / 54.0 ) * ( c * r );
+            prec_type              discr = p * p * p - q * q; // discriminant
+            // calculating numerical round-off errors with assumptions:
+            //  - each operation is precise but each intermediate result x
+            //    when stored has max error of x*eps
+            //  - only multiplication with a power of 2 introduces no new error
+            //  - a,b,c,d and some fractions (e.g. 1/3) have rounding errors eps
+            //  - p_err << |p|, q_err << |q|, ... (this is violated in rare cases)
+            // would be more elegant to use boost::numeric::interval<prec_type>
+            const prec_type eps = internal::eps<prec_type>;
+            prec_type p_err     = eps * ( ( 3.0 / 3.0 ) * std::fabs( b ) + ( 4.0 / 9.0 ) * ( c * c ) + std::fabs( p ) );
+            prec_type r_err     = eps * ( 6.0 * ( c * c ) + 18.0 * std::fabs( b ) + std::fabs( r ) );
+            prec_type q_err     = 0.5 * std::fabs( a ) * eps +
+                ( 1.0 / 54.0 ) * std::fabs( c ) * ( r_err + std::fabs( r ) * 3.0 * eps ) + std::fabs( q ) * eps;
+            prec_type discr_err = ( p * p ) * ( 3.0 * p_err + std::fabs( p ) * 2.0 * eps ) +
+                std::fabs( q ) * ( 2.0 * q_err + std::fabs( q ) * eps ) + std::fabs( discr ) * eps;
+
+            // depending on the discriminant we get different solutions
+            if( std::fabs( discr ) <= discr_err )
+            {
+                // discriminant zero: one or two real roots
+                if( std::fabs( p ) <= p_err )
+                {
+                    // p and q are zero: single root
+                    z.resize( 1 );
+                    z[0] = 0.0; // triple root
+                }
+                else
+                {
+                    z.resize( 2 );
+                    z[0] = 2.0 * q / p; // single root
+                    z[1] = -0.5 * z[0]; // prec_type root
+                }
+            }
+            else if( discr > 0 )
+            {
+                // three real roots: via trigonometric solution
+                z.resize( 3 );
+                prec_type ac = ( 1.0 / 3.0 ) * std::acos( q / ( p * std::sqrt( p ) ) );
+                prec_type sq = 2.0 * std::sqrt( p );
+                z[0]         = sq * std::cos( ac );
+                z[1]         = sq * std::cos( ac - 2.0 * internal::pi<prec_type> / 3.0 );
+                z[2]         = sq * std::cos( ac - 4.0 * internal::pi<prec_type> / 3.0 );
+            }
+            else if( discr < 0.0 )
+            {
+                // single real root: via Cardano's fromula
+                z.resize( 1 );
+                prec_type sgnq  = ( q >= 0 ? 1 : -1 );
+                prec_type basis = std::fabs( q ) + std::sqrt( -discr );
+                prec_type C     = sgnq * std::pow( basis, 1.0 / 3.0 ); // c++11 has std::cbrt()
+                z[0]            = C + p / C;
+            }
+            for( size_t i = 0; i < z.size(); i++ )
+            {
+                // convert depressed cubic roots to original cubic: x = z - c/3
+                z[i] -= ( 1.0 / 3.0 ) * c;
+                // improve solution via newton steps
+                for( int k = 0; k < newton_iter; k++ )
+                {
+                    prec_type f  = ( ( z[i] + c ) * z[i] + b ) * z[i] + a;
+                    prec_type f1 = ( 3.0 * z[i] + 2.0 * c ) * z[i] + b;
+                    // only adjust if slope is large enough
+                    if( std::fabs( f1 ) > 1e-8 )
+                    {
+                        z[i] -= f / f1;
+                    }
+                }
+            }
+            // ensure if a=0 we get exactly x=0 as root
+            // TODO: remove this fudge
+            if( a == 0.0 )
+            {
+                assert( z.size() > 0 ); // cubic should always have at least one root
+                prec_type xmin = std::fabs( z[0] );
+                size_t    imin = 0;
+                for( size_t i = 1; i < z.size(); i++ )
+                {
+                    if( xmin > std::fabs( z[i] ) )
+                    {
+                        xmin = std::fabs( z[i] );
+                        imin = i;
+                    }
+                }
+                z[imin] = 0.0; // replace the smallest absolute value with 0
+            }
+            std::sort( z.begin(), z.end() );
+            return z;
+        }
+
+
+    } // namespace internal
+
+
+} // namespace tk
+
+
+#pragma warning( pop )
+#endif /* TK_SPLINE_H */

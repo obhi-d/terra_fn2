@@ -79,7 +79,8 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &DomainOffset::SetSource );
-            this->AddPerDimensionHybridSource( "Offset", 0.0f, []( DomainOffset* p ) { return std::ref( p->mOffset ); } );
+            this->AddPerDimensionHybridSource( "Offset", 0.0f,
+                                               []( DomainOffset* p ) { return std::ref( p->mOffset ); } );
         }
     };
 #endif
@@ -241,25 +242,13 @@ namespace FastNoise
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &Remap::SetSource );
 
-            this->AddVariable( "From Min", -1.0f,
-                               []( Remap* p, float f ) {
-                                   p->mFromMin = f;
-                               } );
+            this->AddVariable( "From Min", -1.0f, []( Remap* p, float f ) { p->mFromMin = f; } );
 
-            this->AddVariable( "From Max", 1.0f,
-                               []( Remap* p, float f ) {
-                                   p->mFromMax = f;
-                               } );
+            this->AddVariable( "From Max", 1.0f, []( Remap* p, float f ) { p->mFromMax = f; } );
 
-            this->AddVariable( "To Min", 0.0f,
-                               []( Remap* p, float f ) {
-                                   p->mToMin = f;
-                               } );
+            this->AddVariable( "To Min", 0.0f, []( Remap* p, float f ) { p->mToMin = f; } );
 
-            this->AddVariable( "To Max", 1.0f,
-                               []( Remap* p, float f ) {
-                                   p->mToMax = f;
-                               } );
+            this->AddVariable( "To Max", 1.0f, []( Remap* p, float f ) { p->mToMax = f; } );
         }
     };
 #endif
@@ -428,15 +417,9 @@ namespace FastNoise
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &ConvertRGBA8::SetSource );
 
-            this->AddVariable( "Min", -1.0f,
-                               []( ConvertRGBA8* p, float f ) {
-                                   p->mMin = f;
-                               } );
+            this->AddVariable( "Min", -1.0f, []( ConvertRGBA8* p, float f ) { p->mMin = f; } );
 
-            this->AddVariable( "Max", 1.0f,
-                               []( ConvertRGBA8* p, float f ) {
-                                   p->mMax = f;
-                               } );
+            this->AddVariable( "Max", 1.0f, []( ConvertRGBA8* p, float f ) { p->mMax = f; } );
         }
     };
 #endif
@@ -478,15 +461,9 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &ConvertRAW16::SetSource );
-            this->AddVariable( "Min", -1.0f,
-                               []( ConvertRAW16* p, float f ) {
-                                   p->mMin = f;
-                               } );
+            this->AddVariable( "Min", -1.0f, []( ConvertRAW16* p, float f ) { p->mMin = f; } );
 
-            this->AddVariable( "Max", 1.0f,
-                               []( ConvertRAW16* p, float f ) {
-                                   p->mMax = f;
-                               } );
+            this->AddVariable( "Max", 1.0f, []( ConvertRAW16* p, float f ) { p->mMax = f; } );
         }
     };
 #endif
@@ -611,7 +588,8 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &AddDimension::SetSource );
-            this->AddHybridSource( "New Dimension Position", 0.0f, &AddDimension::SetNewDimensionPosition, &AddDimension::SetNewDimensionPosition );
+            this->AddHybridSource( "New Dimension Position", 0.0f, &AddDimension::SetNewDimensionPosition,
+                                   &AddDimension::SetNewDimensionPosition );
         }
     };
 #endif
@@ -735,7 +713,8 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &EdgeFalloff::SetSource );
-            this->AddVariableEnum( "Fallloff Type", FalloffType::ePerPlane, &EdgeFalloff::SetFalloffType, kFalloffType );
+            this->AddVariableEnum( "Fallloff Type", FalloffType::ePerPlane, &EdgeFalloff::SetFalloffType,
+                                   kFalloffType );
             this->AddVariable( "Falloff", 1.0f, &EdgeFalloff::SetFalloff );
             this->AddVariable( "EdgeLevel", 0.0f, &EdgeFalloff::SetEdgeLevel );
         }
@@ -743,6 +722,68 @@ namespace FastNoise
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
     };
 
+#endif
+
+
+    class ApplyOnRange : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetModification( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mModif, gen );
+        }
+
+        void SetOrigin( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mOrigin, gen );
+        }
+
+        void SetMax( float value )
+        {
+            mMax = value;
+        }
+
+        void SetMin( float value )
+        {
+            mMin = value;
+        }
+
+        void SetMixFactor( float value )
+        {
+            mMixFactor = value;
+        }
+
+    protected:
+        GeneratorSource mModif;
+        GeneratorSource mOrigin;
+
+        float mMax       = 0.0f;
+        float mMin       = 1.0f;
+        float mMixFactor = 1.0f;
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<ApplyOnRange> : MetadataT<Generator>
+    {
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Modification", &ApplyOnRange::SetModification );
+            this->AddGeneratorSource( "Origin", &ApplyOnRange::SetOrigin );
+            this->AddVariable( "Min", -1.0f, &ApplyOnRange::SetMin );
+            this->AddVariable( "Max", 1.0f, &ApplyOnRange::SetMax );
+            this->AddVariable( "MixFactor", 1.0f, &ApplyOnRange::SetMixFactor );
+        }
+    };
 #endif
 
 

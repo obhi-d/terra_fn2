@@ -222,6 +222,9 @@ public:
         }
     };
 
+    void ApplyChanges() override
+    {
+    }
 
     // Called with min/max computed
     virtual void Finalize( Context& ) const

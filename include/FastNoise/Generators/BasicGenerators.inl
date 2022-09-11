@@ -35,7 +35,8 @@ class FS_T<FastNoise::White, FS> : public virtual FastNoise::White, public FS_T<
         {
             std::array<int32v, N> tmp;
             for( uint n = 0; n < N; ++n )
-                tmp[n] = ( FS_Castf32_i32( i.v[b][n] ) ^ ( FS_Castf32_i32( i.v[b][n] ) >> 16 ) ) * int32v( FnPrimes::Lookup[n] );
+                tmp[n] = ( FS_Castf32_i32( i.v[b][n] ) ^ ( FS_Castf32_i32( i.v[b][n] ) >> 16 ) ) *
+                    int32v( FnPrimes::Lookup[n] );
             o.output[b] = FnUtils::GetValueCoord( params.seed, tmp );
         }
     }
@@ -86,7 +87,8 @@ class FS_T<FastNoise::SineWave, FS> : public virtual FastNoise::SineWave, public
 };
 
 template<typename FS>
-class FS_T<FastNoise::PositionOutput, FS> : public virtual FastNoise::PositionOutput, public FS_T<FastNoise::Generator, FS>
+class FS_T<FastNoise::PositionOutput, FS> : public virtual FastNoise::PositionOutput,
+                                            public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
@@ -109,7 +111,8 @@ class FS_T<FastNoise::PositionOutput, FS> : public virtual FastNoise::PositionOu
 };
 
 template<typename FS>
-class FS_T<FastNoise::DistanceToPoint, FS> : public virtual FastNoise::DistanceToPoint, public FS_T<FastNoise::Generator, FS>
+class FS_T<FastNoise::DistanceToPoint, FS> : public virtual FastNoise::DistanceToPoint,
+                                             public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
@@ -190,14 +193,61 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
         switch( mSampling )
         {
 
-#define FASTNOISE_SamplingCase( x ) \
-    case FastNoise::Sampling::x:    \
+#define FASTNOISE_SamplingCase( x )                                                                                    \
+    case FastNoise::Sampling::x:                                                                                       \
         return GenBlockTS<Input, FastNoise::Sampling::x>( params, u, i, o )
         default:
             FASTNOISE_SamplingCase( e1x );
             FASTNOISE_SamplingCase( e2x );
             FASTNOISE_SamplingCase( e3x );
             FASTNOISE_SamplingCase( e4x );
+        }
+    }
+};
+
+
+template<typename FS>
+class FS_T<FastNoise::CurveGen, FS> : public virtual FastNoise::CurveGen, public FS_T<FastNoise::Generator, FS>
+{
+    FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto N = Input::N;
+
+        if( N == 2 )
+        {
+            auto fullX     = float32v( u.recipAbsSize[0] );
+            auto fullY     = float32v( u.recipAbsSize[1] );
+            auto offX      = float32v( u.absOffset[0] );
+            auto offY      = float32v( u.absOffset[1] );
+            auto str       = float32v( mStrength );
+            auto BlockSize = i.MaxVectorsInBlock();
+            for( std::uint32_t b = 0; b < BlockSize; ++b )
+            {
+                auto     vecU   = ( i.v[b][0] - offX ) * fullX;
+                auto     vecV   = ( i.v[b][1] - offY ) * fullY;
+                float32v sample = float32v( 1.0f );
+                // we cannot vector sample the image so fill up a vector
+                {
+                    float* fd = (float*)&sample;
+                    if( mApplyX )
+                    {
+                        float* fu = (float*)&vecU;
+                        for( uint p = 0; p < FS_Size_32(); ++p )
+                            fd[p] = mCurve( fu[p] );
+                    }
+                    if( mApplyY )
+                    {
+                        float* fv = (float*)&vecV;
+                        for( uint p = 0; p < FS_Size_32(); ++p )
+                            fd[p] *= mCurve( fv[p] );
+                    }
+                }
+                o.output[b] = sample * str;
+            }
         }
     }
 };

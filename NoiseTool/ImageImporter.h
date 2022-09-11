@@ -24,7 +24,7 @@ namespace Magnum
     {
         PluginManager::Manager<Trade::AbstractImporter> manager;
         Containers::Pointer<Trade::AbstractImporter>    importer =
-            manager.loadAndInstantiate( "StbImageImporter" );
+            manager.loadAndInstantiate( file.ends_with( ".dds" ) ? "DdsImporter" : "StbImageImporter" );
         if( !importer || !importer->openFile( std::string { file } ) )
         {
             return FastNoise::ImageData {};
@@ -57,6 +57,10 @@ namespace Magnum
             case PixelFormat::R32I:
             case PixelFormat::R32UI:
                 image.format = FastNoise::ImageData::Format::EUInt;
+                break;
+            case PixelFormat::R16Snorm:
+            case PixelFormat::R16I:
+                image.format = FastNoise::ImageData::Format::EUInt16;
                 break;
             default:
                 return FastNoise::ImageData {};

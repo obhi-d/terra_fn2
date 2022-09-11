@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include "FastNoise/AllocUtils.h"
+#include "FastNoise/CurveData.h"
 #include "FastNoise/FastNoise_Config.h"
 #include "FastNoise/ImageData.h"
 
@@ -239,6 +240,9 @@ namespace FastNoise
 
         virtual void GenTileable2D( Context& out,
                                     int xSize, int ySize, float frequency, int seed ) const = 0;
+
+        // called when all member variables have been set
+        virtual void ApplyChanges() = 0;
 
     protected:
         template<typename T>
@@ -530,12 +534,11 @@ namespace FastNoise
         }
 
         template<typename U>
-        void AddVariableImage( const char* name, const char* extensions, void ( U::*func )( ImageData const& ) )
+        void AddVariableImage( const char* name, void ( U::*func )( ImageData const& ) )
         {
             MemberImage member;
-            member.name       = name;
-            member.extensions = extensions;
-            member.setFunc    = [func]( Generator* g, ImageData const& s ) {
+            member.name    = name;
+            member.setFunc = [func]( Generator* g, ImageData const& s ) {
                 if( U* gRealType = dynamic_cast<U*>( g ) )
                 {
                     ( gRealType->*func )( s );
@@ -544,6 +547,22 @@ namespace FastNoise
                 return false;
             };
             memberImages.push_back( member );
+        }
+
+        template<typename U>
+        void AddVariableCurve( const char* name, void ( U::*func )( FastNoise::CurveData const& data ) )
+        {
+            MemberCurve member;
+            member.name    = name;
+            member.setFunc = [func]( Generator* g, CurveData const& s ) {
+                if( U* gRealType = dynamic_cast<U*>( g ) )
+                {
+                    ( gRealType->*func )( s );
+                    return true;
+                }
+                return false;
+            };
+            memberCurves.push_back( member );
         }
 
     private:

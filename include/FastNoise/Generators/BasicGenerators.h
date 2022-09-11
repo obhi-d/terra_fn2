@@ -1,4 +1,5 @@
 #pragma once
+#include "CurveData.h"
 #include "Generator.h"
 
 namespace FastNoise
@@ -140,7 +141,8 @@ namespace FastNoise
         MetadataT()
         {
             groups.push_back( "Basic Generators" );
-            this->AddPerDimensionVariable( "Multiplier", 0.0f, []( PositionOutput* p ) { return std::ref( p->mMultiplier ); } );
+            this->AddPerDimensionVariable( "Multiplier", 0.0f,
+                                           []( PositionOutput* p ) { return std::ref( p->mMultiplier ); } );
             this->AddPerDimensionVariable( "Offset", 0.0f, []( PositionOutput* p ) { return std::ref( p->mOffset ); } );
         }
     };
@@ -185,7 +187,8 @@ namespace FastNoise
         MetadataT()
         {
             groups.push_back( "Basic Generators" );
-            this->AddVariableEnum( "Distance Function", DistanceFunction::Euclidean, &DistanceToPoint::SetDistanceFunction, kDistanceFunction_Strings );
+            this->AddVariableEnum( "Distance Function", DistanceFunction::Euclidean,
+                                   &DistanceToPoint::SetDistanceFunction, kDistanceFunction_Strings );
             this->AddPerDimensionVariable( "Point", 0.0f, []( DistanceToPoint* p ) { return std::ref( p->mPoint ); } );
         }
     };
@@ -253,9 +256,62 @@ namespace FastNoise
         {
             groups.push_back( "Basic Generators" );
             this->AddVariableEnum( "Sampling", Sampling::e1x, &StrataMask::SetSampling, kSampling );
-            this->AddVariableImage( "StrataSource", ".png,.jpeg,.jpg,.tga,.bmp,.dds,.ktx2", &StrataMask::SetImage );
+            this->AddVariableImage( "StrataSource", &StrataMask::SetImage );
             this->AddVariable( "MinScale", -1.0f, &StrataMask::SetMinScale, -1000.0f, 1000.0f );
             this->AddVariable( "MaxScale", 1.0f, &StrataMask::SetMaxScale, -1000.0f, 1000.0f );
+        }
+
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+    };
+
+#endif
+
+    class CurveGen : public virtual Generator
+    {
+
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetCurve( FastNoise::CurveData const& data )
+        {
+            mCurve = data.spline;
+        }
+
+        void SetApplyX( bool value )
+        {
+            mApplyX = value;
+        }
+
+        void SetApplyY( bool value )
+        {
+            mApplyY = value;
+        }
+
+        void SetStrength( float value )
+        {
+            mStrength = value;
+        }
+
+    protected:
+        bool         mApplyX   = false;
+        bool         mApplyY   = false;
+        float        mStrength = 1.0f;
+        tk::spline<> mCurve;
+    };
+
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<CurveGen> : MetadataT<Generator>
+    {
+        MetadataT()
+        {
+            groups.push_back( "Basic Generators" );
+            this->AddVariableCurve( "Curve", &CurveGen::SetCurve );
+            this->AddVariable( "ApplyX", true, &CurveGen::SetApplyX );
+            this->AddVariable( "ApplyY", true, &CurveGen::SetApplyY );
+            this->AddVariable( "Strength", 1.0f, &CurveGen::SetStrength );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;

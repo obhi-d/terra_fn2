@@ -47,6 +47,7 @@ namespace FastNoise
             EUInt,
             EFloat,
             ERGBA,
+            EUInt16,
             ERGB
         };
 
@@ -147,6 +148,8 @@ namespace FastNoise
             case Format::ERGBA:
             case Format::EUInt:
                 return (float)( (double)get<std::uint32_t>( x, y ) / (double)std::numeric_limits<std::uint32_t>::max() );
+            case Format::EUInt16:
+                return (float)( (double)get<std::uint32_t>( x, y ) / (double)std::numeric_limits<std::uint16_t>::max() );
             case Format::EFloat:
                 return get<float>( x, y );
             }

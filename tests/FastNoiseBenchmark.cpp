@@ -40,6 +40,9 @@ FastNoise::SmartNode<> BuildGenerator( benchmark::State& state, const FastNoise:
             }
         }
     }
+
+    generator->ApplyChanges();
+
     return generator;
 }
 

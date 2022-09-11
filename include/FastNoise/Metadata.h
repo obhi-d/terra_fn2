@@ -4,8 +4,10 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "CurveData.h"
 #include "FastNoise_Config.h"
 #include "ImageData.h"
 
@@ -106,8 +108,7 @@ namespace FastNoise
                 EFloat,
                 EInt,
                 EBool,
-                EEnum,
-                EFilePath
+                EEnum
             };
 
             union ValueUnion
@@ -139,6 +140,11 @@ namespace FastNoise
                 operator int()
                 {
                     return i;
+                }
+
+                operator bool()
+                {
+                    return b;
                 }
 
                 bool operator==( const ValueUnion& rhs ) const
@@ -179,11 +185,26 @@ namespace FastNoise
             std::function<bool( Generator*, SmartNodeArg<> )> setNodeFunc;
         };
 
-        // Set a string
+        // Set an image file
         struct MemberImage : Member
         {
             std::string                                                    extensions = ".";
             std::function<bool( Generator*, FastNoise::ImageData const& )> setFunc;
+        };
+
+        // Set array of ints of floats
+        struct MemberArray : Member
+        {
+            // Function to set value for given generator
+            // Returns true if Generator is correct node class
+            // Uses table editor
+            using Setter = std::variant<std::function<bool( Generator*, std::vector<float> )>, std::function<bool( Generator*, std::vector<int> )>>;
+            Setter setFunc;
+        };
+
+        struct MemberCurve : Member
+        {
+            std::function<bool( Generator*, FastNoise::CurveData const& )> setFunc;
         };
 
         uint16_t                 id;
@@ -194,6 +215,7 @@ namespace FastNoise
         std::vector<MemberNodeLookup> memberNodeLookups;
         std::vector<MemberHybrid>     memberHybrids;
         std::vector<MemberImage>      memberImages;
+        std::vector<MemberCurve>      memberCurves;
 
         /// <summary>
         /// Create new instance of a FastNoise node from metadata
@@ -234,6 +256,7 @@ namespace FastNoise
         std::vector<NodeData*>                            nodeLookups;
         std::vector<std::pair<NodeData*, float>>          hybrids;
         std::vector<FastNoise::ImageDataView>             images;
+        std::vector<FastNoise::CurveData>                 curves;
 
         bool operator==( const NodeData& rhs ) const
         {
@@ -241,7 +264,8 @@ namespace FastNoise
                 variables == rhs.variables &&
                 nodeLookups == rhs.nodeLookups &&
                 hybrids == rhs.hybrids &&
-                images == rhs.images;
+                images == rhs.images &&
+                curves == rhs.curves;
         }
     };
 } // namespace FastNoise

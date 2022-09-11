@@ -38,4 +38,13 @@ namespace FastNoise
             dataStream.push_back( (uint8_t)( value >> ( i * 8 ) ) );
         }
     }
+
+    inline void AddToDataStream( std::vector<uint8_t>& dataStream, float value )
+    {
+        uint32_t cast = *(uint32_t*)( &value );
+        for( size_t i = 0; i < sizeof( value ); i++ )
+        {
+            dataStream.push_back( (uint8_t)( cast >> ( i * 8 ) ) );
+        }
+    }
 } // namespace FastNoise

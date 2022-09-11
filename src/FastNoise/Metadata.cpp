@@ -44,6 +44,7 @@ NodeData::NodeData( const Metadata* data )
         }
 
         images.resize( metadata->memberImages.size() );
+        curves.resize( metadata->memberCurves.size() );
     }
 }
 
@@ -168,9 +169,13 @@ bool SerialiseNodeDataInternal( NodeData* nodeData, bool fixUp, std::vector<uint
     // File
     for( size_t i = 0; i < metadata->memberImages.size(); i++ )
     {
-        if( i >= nodeData->images.size() )
-            nodeData->images.resize( i + 1 );
         AddToDataStream( dataStream, nodeData->images[i].index );
+    }
+
+    for( size_t i = 0; i < metadata->memberCurves.size(); i++ )
+    {
+        auto const& curve = nodeData->curves[i];
+        curve.toDataStream( dataStream );
     }
 
     referenceIds.emplace( nodeData, (uint16_t)referenceIds.size() );
@@ -270,6 +275,8 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
             {
                 return nullptr;
             }
+
+            nodeGen->ApplyChanges();
         }
         else
         {
@@ -292,7 +299,18 @@ SmartNode<> DeserialiseSmartNodeInternal( const std::vector<uint8_t>& serialised
         var.setFunc( generator.get(), f.toImage() );
     }
 
+
+    for( const auto& var: metadata->memberCurves )
+    {
+        FastNoise::CurveData cd;
+        cd.fromDataStream( serialisedNodeData, serialIdx );
+        var.setFunc( generator.get(), cd );
+    }
+
+
     referenceNodes.emplace_back( generator );
+
+    generator->ApplyChanges();
 
     return generator;
 }
@@ -398,6 +416,15 @@ NodeData* DeserialiseNodeDataInternal( const std::vector<uint8_t>& serialisedNod
     for( auto& node: nodeData->images )
     {
         if( !GetFromDataStream( serialisedNodeData, serialIdx, node.index ) )
+        {
+            return nullptr;
+        }
+    }
+
+    // Member curves
+    for( auto& node: nodeData->curves )
+    {
+        if( !node.fromDataStream( serialisedNodeData, serialIdx ) )
         {
             return nullptr;
         }

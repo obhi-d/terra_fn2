@@ -78,10 +78,12 @@ class FS_T<FastNoise::DomainRotate, FS> : public virtual FastNoise::DomainRotate
                 auto BlockSize = i.MaxVectorsInBlock();
                 for( std::uint32_t b = 0; b < BlockSize; ++b )
                 {
-                    auto x     = i.v[b][0];
-                    auto y     = i.v[b][1];
-                    i2.v[b][0] = FS_FMulAdd_f32( x, float32v( mXa ), FS_FMulAdd_f32( y, float32v( mXb ), float32v( 0 ) ) );
-                    i2.v[b][1] = FS_FMulAdd_f32( x, float32v( mYa ), FS_FMulAdd_f32( y, float32v( mYb ), float32v( 0 ) ) );
+                    auto x = i.v[b][0];
+                    auto y = i.v[b][1];
+                    i2.v[b][0] =
+                        FS_FMulAdd_f32( x, float32v( mXa ), FS_FMulAdd_f32( y, float32v( mXb ), float32v( 0 ) ) );
+                    i2.v[b][1] =
+                        FS_FMulAdd_f32( x, float32v( mYa ), FS_FMulAdd_f32( y, float32v( mYb ), float32v( 0 ) ) );
                 }
             }
             this->GetSourceValue( mSource, params, u, i2, o );
@@ -92,12 +94,15 @@ class FS_T<FastNoise::DomainRotate, FS> : public virtual FastNoise::DomainRotate
             auto  BlockSize = i.MaxVectorsInBlock();
             for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
-                auto x     = i.v[b][0];
-                auto y     = i.v[b][1];
-                auto z     = i.v[b][2];
-                i2.v[b][0] = FS_FMulAdd_f32( x, float32v( mXa ), FS_FMulAdd_f32( y, float32v( mXb ), z * float32v( mXc ) ) );
-                i2.v[b][1] = FS_FMulAdd_f32( x, float32v( mYa ), FS_FMulAdd_f32( y, float32v( mYb ), z * float32v( mYc ) ) );
-                i2.v[b][2] = FS_FMulAdd_f32( x, float32v( mZa ), FS_FMulAdd_f32( y, float32v( mZb ), z * float32v( mZc ) ) );
+                auto x = i.v[b][0];
+                auto y = i.v[b][1];
+                auto z = i.v[b][2];
+                i2.v[b][0] =
+                    FS_FMulAdd_f32( x, float32v( mXa ), FS_FMulAdd_f32( y, float32v( mXb ), z * float32v( mXc ) ) );
+                i2.v[b][1] =
+                    FS_FMulAdd_f32( x, float32v( mYa ), FS_FMulAdd_f32( y, float32v( mYb ), z * float32v( mYc ) ) );
+                i2.v[b][2] =
+                    FS_FMulAdd_f32( x, float32v( mZa ), FS_FMulAdd_f32( y, float32v( mZb ), z * float32v( mZc ) ) );
             }
             this->GetSourceValue( mSource, params, u, i2, o );
         }
@@ -133,7 +138,9 @@ class FS_T<FastNoise::Remap, FS> : public virtual FastNoise::Remap, public FS_T<
         this->GetSourceValue( mSource, params, u, i, o );
         auto BlockSize = i.MaxVectorsInBlock();
         for( std::uint32_t b = 0; b < BlockSize; ++b )
-            o.output[b] = float32v( mToMin ) + ( ( o.output[b] - float32v( mFromMin ) ) / float32v( mFromMax - mFromMin ) * float32v( mToMax - mToMin ) );
+            o.output[b] = float32v( mToMin ) +
+                ( ( o.output[b] - float32v( mFromMin ) ) / float32v( mFromMax - mFromMin ) *
+                  float32v( mToMax - mToMin ) );
     }
 };
 
@@ -329,7 +336,8 @@ class FS_T<FastNoise::Terrace, FS> : public virtual FastNoise::Terrace, public F
 };
 
 template<typename FS>
-class FS_T<FastNoise::DomainAxisScale, FS> : public virtual FastNoise::DomainAxisScale, public FS_T<FastNoise::Generator, FS>
+class FS_T<FastNoise::DomainAxisScale, FS> : public virtual FastNoise::DomainAxisScale,
+                                             public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
@@ -387,7 +395,8 @@ class FS_T<FastNoise::AddDimension, FS> : public virtual FastNoise::AddDimension
 };
 
 template<typename FS>
-class FS_T<FastNoise::RemoveDimension, FS> : public virtual FastNoise::RemoveDimension, public FS_T<FastNoise::Generator, FS>
+class FS_T<FastNoise::RemoveDimension, FS> : public virtual FastNoise::RemoveDimension,
+                                             public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
@@ -421,7 +430,8 @@ class FS_T<FastNoise::RemoveDimension, FS> : public virtual FastNoise::RemoveDim
 };
 
 template<typename FS>
-class FS_T<FastNoise::GeneratorCache, FS> : public virtual FastNoise::GeneratorCache, public FS_T<FastNoise::Generator, FS>
+class FS_T<FastNoise::GeneratorCache, FS> : public virtual FastNoise::GeneratorCache,
+                                            public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
@@ -464,5 +474,36 @@ class FS_T<FastNoise::EdgeFalloff, FS> : public virtual FastNoise::EdgeFalloff, 
             }
         }
         // u.ctx.
+    }
+};
+
+
+template<typename FS>
+class FS_T<FastNoise::ApplyOnRange, FS> : public virtual FastNoise::ApplyOnRange, public FS_T<FastNoise::Generator, FS>
+{
+    FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto N = Input::N;
+
+        typename Output::LocalBlock lb;
+        Output                      origin( lb );
+        this->GetSourceValue( mModif, params, u, i, o );
+        this->GetSourceValue( mOrigin, params, u, i, origin );
+
+        auto BlockSize   = i.MaxVectorsInBlock();
+        auto minV        = float32v( mMin );
+        auto maxV        = float32v( mMax );
+        auto mix         = float32v( mMixFactor );
+        auto oneMinusMix = float32v( 1 - mMixFactor );
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
+        {
+            auto flags = mask32v( origin.output[b] > minV );
+            flags &= mask32v( origin.output[b] < maxV );
+            o.output[b] = FS_Select_f32( flags, o.output[b] * mix + origin.output[b] * oneMinusMix, origin.output[b] );
+        }
     }
 };

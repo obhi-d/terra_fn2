@@ -68,6 +68,7 @@ CPMAddPackage(
     OPTIONS
         "BUILD_STATIC ON"
         "WITH_STBIMAGEIMPORTER ON"
+        "WITH_DDSIMPORTER ON"
 )
 
 CPMAddPackage(
@@ -132,7 +133,7 @@ target_link_libraries(NoiseTool PRIVATE
     ImGui::SourcesMiscCpp
     robin_hood
 )
-add_dependencies(NoiseTool MagnumPlugins::StbImageImporter)
+add_dependencies(NoiseTool MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
 # Windows HiDPI support
 if(CORRADE_TARGET_WINDOWS)
     target_sources(NoiseTool PRIVATE WindowsHiDPI.manifest)
