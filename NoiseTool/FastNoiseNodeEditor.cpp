@@ -1296,8 +1296,8 @@ void FastNoiseNodeEditor::DoNodes()
             }
 
             ImNodes::EndStaticAttribute();
-            if( nodeVar.sameLine )
-                ImGui::SameLine();
+            // if( nodeVar.sameLine )
+            //    ImGui::SameLine();
         }
 
         for( size_t i = 0; i < nodeMetadata->memberImages.size(); ++i )
@@ -1634,7 +1634,7 @@ void FastNoiseNodeEditor::ChangeSelectedNode( FastNoise::NodeData* newId )
 
     if( generator )
     {
-        mMeshNoisePreview.ReGenerate( generator );
+        mMeshNoisePreview.SetGenerator( generator );
     }
 }
 

@@ -14,6 +14,7 @@
 #include "FastNoise/FastNoise.h"
 #include "FastNoise/Metadata.h"
 
+#include "EditableHieghtmap.h"
 #include "FastNoise/ImageData.h"
 #include "MeshNoisePreview.h"
 #include "NoiseTexture.h"
@@ -155,8 +156,9 @@ namespace Magnum
 
         bool mImportNodeModal = false;
 
-        MeshNoisePreview mMeshNoisePreview;
-        NoiseTexture     mNoiseTexture;
+        // MeshNoisePreview mMeshNoisePreview;
+        EditableHeightmap mMeshNoisePreview;
+        NoiseTexture      mNoiseTexture;
 
         FastNoise::NodeData* mSelectedNode = nullptr;
         Node                 mOverheadNode;

@@ -97,7 +97,8 @@ CPMAddPackage(
 )
 
 set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
-set(PNG_BUILD_ZLIB ON CACHE BOOL "Custom zlib Location, else find_package is used")
+set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+set(PNG_BUILD_ZLIB OFF CACHE BOOL "Custom zlib Location, else find_package is used")
 include_directories(ZLIB_INCLUDE_DIRS)
 
 CPMAddPackage(
