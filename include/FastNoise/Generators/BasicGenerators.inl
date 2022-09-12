@@ -181,10 +181,12 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
                     float* fd = (float*)&sample;
                     for( uint p = 0; p < FS_Size_32(); ++p )
                     {
-                        if( mTile[0] )
-                            fu[p] = std::fmod( fu[p], 1.0f );
-                        if( mTile[1] )
-                            fv[p] = std::fmod( fv[p], 1.0f );
+                        fu[p] = std::fmod( fu[p], 1.0f );
+                        fv[p] = std::fmod( fv[p], 1.0f );
+                        if( fu[p] < 0 )
+                            fu[p] = mMirror[0] ? std::fabs( fu[p] ) : 1.0f - std::fabs( fu[p] );
+                        if( fv[p] < 0 )
+                            fv[p] = mMirror[1] ? std::fabs( fv[p] ) : 1.0f - std::fabs( fv[p] );
                         if constexpr( Sampling == FastNoise::Sampling::e1x )
                             fd[p] = mImage->sample( fu[p], fv[p] );
                         else

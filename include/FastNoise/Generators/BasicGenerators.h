@@ -242,7 +242,7 @@ namespace FastNoise
         float mMaxScale = 1.0f;
 
         ImageData const*               mImage    = nullptr;
-        PerDimensionVariable<bool, 2>  mTile     = false;
+        PerDimensionVariable<bool, 2>  mMirror   = false;
         PerDimensionVariable<float, 2> mOffset   = {};
         PerDimensionVariable<float, 2> mScale    = {};
         Sampling                       mSampling = Sampling::e1x;
@@ -263,7 +263,7 @@ namespace FastNoise
             this->AddVariableImage( "StrataSource", &StrataMask::SetImage );
             this->AddVariable( "Min", -1.0f, &StrataMask::SetMinScale );
             this->AddVariable( "Max", 1.0f, &StrataMask::SetMaxScale );
-            this->AddPerDimensionVariable( "Tile", true, []( StrataMask* p ) { return std::ref( p->mTile ); } );
+            this->AddPerDimensionVariable( "Mirror", true, []( StrataMask* p ) { return std::ref( p->mMirror ); } );
             this->AddPerDimensionVariable(
                 "Offset", 0.0f, []( StrataMask* p ) { return std::ref( p->mOffset ); }, 0.0f, 1.0f );
             this->AddPerDimensionVariable( "Scale", 1.0f, []( StrataMask* p ) { return std::ref( p->mScale ); } );
