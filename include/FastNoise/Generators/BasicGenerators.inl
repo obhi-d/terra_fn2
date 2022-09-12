@@ -161,12 +161,18 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
             auto offY   = float32v( u.absOffset[1] );
             auto minS   = float32v( mMinScale );
             auto rangeS = float32v( mMaxScale - mMinScale );
+            auto offU   = float32v( mOffset[0] );
+            auto offV   = float32v( mOffset[1] );
+            auto xU     = float32v( mScale[0] ) * fullX;
+            auto xV     = float32v( mScale[1] ) * fullY;
 
             auto BlockSize = i.MaxVectorsInBlock();
             for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
-                auto     vecU = ( i.v[b][0] - offX ) * fullX;
-                auto     vecV = ( i.v[b][1] - offY ) * fullY;
+                auto vecU = FS_FMulAdd_f32( ( i.v[b][0] - offX ), xU, offU );
+                auto vecV = FS_FMulAdd_f32( ( i.v[b][1] - offY ), xV, offV );
+
+
                 float32v sample;
                 // we cannot vector sample the image so fill up a vector
                 {
@@ -175,6 +181,10 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
                     float* fd = (float*)&sample;
                     for( uint p = 0; p < FS_Size_32(); ++p )
                     {
+                        if( mTile[0] )
+                            fu[p] = std::fmod( fu[p], 1.0f );
+                        if( mTile[1] )
+                            fv[p] = std::fmod( fv[p], 1.0f );
                         if constexpr( Sampling == FastNoise::Sampling::e1x )
                             fd[p] = mImage->sample( fu[p], fv[p] );
                         else
@@ -223,7 +233,8 @@ class FS_T<FastNoise::CurveGen, FS> : public virtual FastNoise::CurveGen, public
             auto fullY     = float32v( u.recipAbsSize[1] );
             auto offX      = float32v( u.absOffset[0] );
             auto offY      = float32v( u.absOffset[1] );
-            auto str       = float32v( mStrength );
+            auto strX      = float32v( mStrength[0] );
+            auto strY      = float32v( mStrength[1] );
             auto BlockSize = i.MaxVectorsInBlock();
             for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
@@ -233,20 +244,23 @@ class FS_T<FastNoise::CurveGen, FS> : public virtual FastNoise::CurveGen, public
                 // we cannot vector sample the image so fill up a vector
                 {
                     float* fd = (float*)&sample;
-                    if( mApplyX )
+                    if( mApply[0] )
                     {
                         float* fu = (float*)&vecU;
                         for( uint p = 0; p < FS_Size_32(); ++p )
                             fd[p] = mCurve( fu[p] );
+                        sample *= strX;
                     }
-                    if( mApplyY )
+
+                    if( mApply[1] )
                     {
                         float* fv = (float*)&vecV;
                         for( uint p = 0; p < FS_Size_32(); ++p )
                             fd[p] *= mCurve( fv[p] );
+                        sample *= strY;
                     }
                 }
-                o.output[b] = sample * str;
+                o.output[b] = sample;
             }
         }
     }

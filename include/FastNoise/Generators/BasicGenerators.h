@@ -238,10 +238,14 @@ namespace FastNoise
         }
 
     protected:
-        float            mMinScale = 0.0f;
-        float            mMaxScale = 1.0f;
-        ImageData const* mImage    = nullptr;
-        Sampling         mSampling = Sampling::e1x;
+        float mMinScale = 0.0f;
+        float mMaxScale = 1.0f;
+
+        ImageData const*               mImage    = nullptr;
+        PerDimensionVariable<bool, 2>  mTile     = false;
+        PerDimensionVariable<float, 2> mOffset   = {};
+        PerDimensionVariable<float, 2> mScale    = {};
+        Sampling                       mSampling = Sampling::e1x;
 
         template<typename T>
         friend struct MetadataT;
@@ -257,8 +261,12 @@ namespace FastNoise
             groups.push_back( "Basic Generators" );
             this->AddVariableEnum( "Sampling", Sampling::e1x, &StrataMask::SetSampling, kSampling );
             this->AddVariableImage( "StrataSource", &StrataMask::SetImage );
-            this->AddVariable( "MinScale", -1.0f, &StrataMask::SetMinScale, -1000.0f, 1000.0f );
-            this->AddVariable( "MaxScale", 1.0f, &StrataMask::SetMaxScale, -1000.0f, 1000.0f );
+            this->AddVariable( "Min", -1.0f, &StrataMask::SetMinScale );
+            this->AddVariable( "Max", 1.0f, &StrataMask::SetMaxScale );
+            this->AddPerDimensionVariable( "Tile", true, []( StrataMask* p ) { return std::ref( p->mTile ); } );
+            this->AddPerDimensionVariable(
+                "Offset", 0.0f, []( StrataMask* p ) { return std::ref( p->mOffset ); }, 0.0f, 1.0f );
+            this->AddPerDimensionVariable( "Scale", 1.0f, []( StrataMask* p ) { return std::ref( p->mScale ); } );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
@@ -278,26 +286,14 @@ namespace FastNoise
             mCurve = data.spline;
         }
 
-        void SetApplyX( bool value )
-        {
-            mApplyX = value;
-        }
-
-        void SetApplyY( bool value )
-        {
-            mApplyY = value;
-        }
-
-        void SetStrength( float value )
-        {
-            mStrength = value;
-        }
 
     protected:
-        bool         mApplyX   = false;
-        bool         mApplyY   = false;
-        float        mStrength = 1.0f;
+        PerDimensionVariable<bool, 2>  mApply    = false;
+        PerDimensionVariable<float, 2> mStrength = false;
+
         tk::spline<> mCurve;
+        template<typename T>
+        friend struct MetadataT;
     };
 
 
@@ -309,9 +305,8 @@ namespace FastNoise
         {
             groups.push_back( "Basic Generators" );
             this->AddVariableCurve( "Curve", &CurveGen::SetCurve );
-            this->AddVariable( "ApplyX", true, &CurveGen::SetApplyX );
-            this->AddVariable( "ApplyY", true, &CurveGen::SetApplyY );
-            this->AddVariable( "Strength", 1.0f, &CurveGen::SetStrength );
+            this->AddPerDimensionVariable( "Apply", true, []( CurveGen* p ) { return std::ref( p->mApply ); } );
+            this->AddPerDimensionVariable( "Strength", 1.0f, []( CurveGen* p ) { return std::ref( p->mStrength ); } );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;

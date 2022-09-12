@@ -1296,6 +1296,8 @@ void FastNoiseNodeEditor::DoNodes()
             }
 
             ImNodes::EndStaticAttribute();
+            if( nodeVar.sameLine )
+                ImGui::SameLine();
         }
 
         for( size_t i = 0; i < nodeMetadata->memberImages.size(); ++i )

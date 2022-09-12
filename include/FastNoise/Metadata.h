@@ -17,7 +17,7 @@
 namespace FastNoise
 {
     class Generator;
-    template<typename T>
+    template<typename T, int D>
     struct PerDimensionVariable;
     struct Metadata;
     struct NodeData;
@@ -55,8 +55,12 @@ namespace FastNoise
         template<typename T>
         static const Metadata& Get()
         {
-            static_assert( std::is_base_of<Generator, T>::value, "This function should only be used for FastNoise node classes, for example FastNoise::Simplex" );
-            static_assert( std::is_member_function_pointer<decltype( &T::GetMetadata )>::value, "Cannot get Metadata for abstract node class, use a derived class, for example: Fractal -> FractalFBm" );
+            static_assert(
+                std::is_base_of<Generator, T>::value,
+                "This function should only be used for FastNoise node classes, for example FastNoise::Simplex" );
+            static_assert( std::is_member_function_pointer<decltype( &T::GetMetadata )>::value,
+                           "Cannot get Metadata for abstract node class, use a derived class, for example: Fractal -> "
+                           "FractalFBm" );
 
             return Impl::GetMetadata<T>();
         }
@@ -75,7 +79,8 @@ namespace FastNoise
         /// <param name="serialisedBase64NodeData">Encoded string to deserialise</param>
         /// <param name="nodeDataOut">Storage for new node data</param>
         /// <returns>Root node</returns>
-        static NodeData* DeserialiseNodeData( const char* serialisedBase64NodeData, std::vector<std::unique_ptr<NodeData>>& nodeDataOut );
+        static NodeData* DeserialiseNodeData( const char*                             serialisedBase64NodeData,
+                                              std::vector<std::unique_ptr<NodeData>>& nodeDataOut );
 
         // Base member struct
         struct Member
@@ -103,7 +108,7 @@ namespace FastNoise
         // float, int or enum value
         struct MemberVariable : Member
         {
-            enum eType
+            enum eType : uint8_t
             {
                 EFloat,
                 EInt,
@@ -154,6 +159,7 @@ namespace FastNoise
             };
 
             eType                    type;
+            bool                     sameLine = false;
             ValueUnion               valueDefault, valueMin, valueMax;
             std::vector<const char*> enumNames;
 
@@ -198,7 +204,8 @@ namespace FastNoise
             // Function to set value for given generator
             // Returns true if Generator is correct node class
             // Uses table editor
-            using Setter = std::variant<std::function<bool( Generator*, std::vector<float> )>, std::function<bool( Generator*, std::vector<int> )>>;
+            using Setter = std::variant<std::function<bool( Generator*, std::vector<float> )>,
+                                        std::function<bool( Generator*, std::vector<int> )>>;
             Setter setFunc;
         };
 
@@ -260,12 +267,8 @@ namespace FastNoise
 
         bool operator==( const NodeData& rhs ) const
         {
-            return metadata == rhs.metadata &&
-                variables == rhs.variables &&
-                nodeLookups == rhs.nodeLookups &&
-                hybrids == rhs.hybrids &&
-                images == rhs.images &&
-                curves == rhs.curves;
+            return metadata == rhs.metadata && variables == rhs.variables && nodeLookups == rhs.nodeLookups &&
+                hybrids == rhs.hybrids && images == rhs.images && curves == rhs.curves;
         }
     };
 } // namespace FastNoise
