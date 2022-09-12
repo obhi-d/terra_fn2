@@ -37,14 +37,14 @@ constexpr int MaxRenderStyle = 16;
 
 auto msign( Vector2 v )
 {
-    return Vector2( ( v.x() >= 0.0f ) ? 1.0f : -1.0f,
-                    ( v.y() >= 0.0 ) ? 1.0f : -1.0f );
+    return Vector2( ( v.x() >= 0.0f ) ? 1.0f : -1.0f, ( v.y() >= 0.0 ) ? 1.0f : -1.0f );
 }
 
 auto CompressNormal( Vector3 nor, std::uint32_t CompressionPrec ) -> float
 {
     nor /= ( std::abs( nor.x() ) + std::abs( nor.y() ) + std::abs( nor.z() ) );
-    nor.xy()  = ( nor.z() >= 0.0 ) ? nor.xy() : ( ( Vector2( 1.0f ) - abs( Vector2( nor.y(), nor.x() ) ) ) * msign( nor.xy() ) );
+    nor.xy()  = ( nor.z() >= 0.0 ) ? nor.xy()
+                                   : ( ( Vector2( 1.0f ) - abs( Vector2( nor.y(), nor.x() ) ) ) * msign( nor.xy() ) );
     Vector2 v = Vector2( 0.5 ) + Vector2( 0.5 ) * nor.xy();
 
     std::uint32_t mu = ( 1u << CompressionPrec ) - 1u;
@@ -72,13 +72,13 @@ uint32_t packSnorm2x16( Vector2 const& v )
 auto CompressNormal( Vector3 nor ) -> float
 {
     nor /= ( std::abs( nor.x() ) + std::abs( nor.y() ) + std::abs( nor.z() ) );
-    nor.xy()   = ( nor.z() >= 0.0 ) ? nor.xy() : ( ( Vector2( 1.0f ) - abs( Vector2( nor.y(), nor.x() ) ) ) * msign( nor.xy() ) );
+    nor.xy()   = ( nor.z() >= 0.0 ) ? nor.xy()
+                                    : ( ( Vector2( 1.0f ) - abs( Vector2( nor.y(), nor.x() ) ) ) * msign( nor.xy() ) );
     auto value = packSnorm2x16( nor.xy() );
     return *(float*)( &value );
 };
 
-MeshNoisePreview::MeshNoisePreview() :
-    mVoxelShader( Voxel3D {} )
+MeshNoisePreview::MeshNoisePreview() : mVoxelShader( Voxel3D {} )
 {
     mShader                        = &mMeshShader;
     mBuildData.frequency           = 0.005f;
@@ -134,7 +134,7 @@ void MeshNoisePreview::ReGenerate( FastNoise::SmartNodeArg<> generator )
     }
 }
 
-void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition, const Vector2i& offset )
+void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition )
 {
     if( ImGui::Checkbox( "Generate Mesh Preview", &mEnabled ) )
     {
@@ -247,7 +247,9 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
             for( int cl = 0; cl < 3; cl++ )
             {
                 ImGui::PushID( colorIndex++ );
-                if( ImGui::ColorEdit4( "", color[cl].data(), ImGuiColorEditFlags_::ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar ) )
+                if( ImGui::ColorEdit4( "", color[cl].data(),
+                                       ImGuiColorEditFlags_::ImGuiColorEditFlags_NoInputs |
+                                           ImGuiColorEditFlags_AlphaBar ) )
                 {
                     if( color[cl].a() < lastAlpha[cl] )
                         color[cl].a() = lastAlpha[cl];
@@ -287,10 +289,8 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
     edited |= ImGui::DragFloat( "Frequency", &mBuildData.frequency, 0.0005f, 0, 0, "%.4f" );
     if( mBuildData.meshType == MeshType_LimitedHeightmap2D )
     {
-        edited |= ImGui::DragInt( "Planes X", &mBuildData.heightmapPlanes[0] );
-        edited |= ImGui::DragInt( "Planes Y", &mBuildData.heightmapPlanes[1] );
-        edited |= ImGui::DragInt( "Size X", &mBuildData.heightmapSize[0] );
-        edited |= ImGui::DragInt( "Size Y", &mBuildData.heightmapSize[1] );
+        edited |= ImGui::DragInt2( "Offset", mBuildData.offset.data() );
+        edited |= ImGui::DragInt2( "Size", mBuildData.heightmapSize );
     }
     if( mBuildData.meshType == MeshType_Heightmap2D || mBuildData.meshType == MeshType_LimitedHeightmap2D )
     {
@@ -301,8 +301,6 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
         edited |= ImGui::DragFloat( "Iso Surface", &mBuildData.isoSurface, 0.02f );
     }
 
-    edited |= ( mBuildData.meshType == MeshType_LimitedHeightmap2D ) && offset != mBuildData.offset;
-    mBuildData.offset = offset;
     if( edited )
     {
         ReGenerate( mBuildData.generator );
@@ -321,7 +319,8 @@ void MeshNoisePreview::Draw( const Matrix4& transformation, const Matrix4& proje
     ImGui::Text( "Loaded Chunks: %zu (%d)", mChunks.size(), mMeshesCount );
 
     size_t generateCount = mGenerateQueue.Count();
-    ImGui::Text( "Meshing Chunks: %zu (%zu)", mRegisteredChunkPositions.size() - mChunks.size() - generateCount, generateCount );
+    ImGui::Text( "Meshing Chunks: %zu (%zu)", mRegisteredChunkPositions.size() - mChunks.size() - generateCount,
+                 generateCount );
     ImGui::Text( "Chunk Load Range: %0.1f", mLoadRange );
     ImGui::Text( "Generated Min (%0.6f) : Max (%0.6f)", mMinMax.min, mMinMax.max );
 
@@ -384,10 +383,9 @@ void MeshNoisePreview::UpdateChunkQueues( const Vector3& position )
         mAvgNewChunks += ( newChunks - mAvgNewChunks ) * 0.01f;
     }
 
-    std::sort( mChunks.begin(), mChunks.end(),
-               [chunkPos]( const Chunk& a, const Chunk& b ) {
-                   return ( chunkPos - a.GetPos() ).dot() < ( chunkPos - b.GetPos() ).dot();
-               } );
+    std::sort( mChunks.begin(), mChunks.end(), [chunkPos]( const Chunk& a, const Chunk& b ) {
+        return ( chunkPos - a.GetPos() ).dot() < ( chunkPos - b.GetPos() ).dot();
+    } );
 
     mShader->SetHeightMinMax( mMinMax.min, mMinMax.max );
 
@@ -417,7 +415,8 @@ void MeshNoisePreview::UpdateChunkQueues( const Vector3& position )
     // ImGui::Text( "Deleted Chunks: %zu", deletedChunks );
 
     // Increase load range if queue is not full
-    if( (double)mTriCount < mTriLimit * 0.85 && ( mRegisteredChunkPositions.size() - mChunks.size() ) < mThreads.size() * mAvgNewChunks )
+    if( (double)mTriCount < mTriLimit * 0.85 &&
+        ( mRegisteredChunkPositions.size() - mChunks.size() ) < mThreads.size() * mAvgNewChunks )
     {
         mLoadRange = std::min( mLoadRange * ( 1 + GetLoadRangeModifier() ), 3000.0f );
     }
@@ -467,8 +466,7 @@ void MeshNoisePreview::UpdateChunksForPosition( Vector3 position )
                 chunkPos.z() = z * Chunk::SIZE + chunkCenter.z();
 
 
-                if( ( positionI - chunkPos ).dot() <= loadRangeSq &&
-                    !mRegisteredChunkPositions.contains( chunkPos ) )
+                if( ( positionI - chunkPos ).dot() <= loadRangeSq && !mRegisteredChunkPositions.contains( chunkPos ) )
                 {
                     chunkPositions.push_back( chunkPos );
                 }
@@ -496,7 +494,8 @@ void MeshNoisePreview::UpdateChunksForPosition( Vector3 position )
     // ImGui::Text( "UpdateChunksForPosition(%d) Ms: %.2f", staggerShift, GetTimerDurationMs() );
 }
 
-void MeshNoisePreview::GenerateLoopThread( GenerateQueue<Chunk::BuildData>& generateQueue, CompleteQueue<Chunk::MeshData>& completeQueue )
+void MeshNoisePreview::GenerateLoopThread( GenerateQueue<Chunk::BuildData>& generateQueue,
+                                           CompleteQueue<Chunk::MeshData>&  completeQueue )
 {
     while( true )
     {
@@ -543,11 +542,14 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildMeshData( const 
     return MeshData( buildData.pos, {}, vertexData, indicies );
 }
 
-MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildVoxel3DMesh( const BuildData& buildData, FastNoise::Buffer& density, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
+MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildVoxel3DMesh( const BuildData&         buildData,
+                                                                             FastNoise::Buffer&       density,
+                                                                             std::vector<VertexData>& vertexData,
+                                                                             std::vector<uint32_t>&   indicies )
 {
-    FastNoise::Generator::Context ctx( density, { buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1, 0 } );
-    buildData.generator->GenUniformGrid3D( ctx,
-                                           buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1,
+    FastNoise::Generator::Context ctx( density,
+                                       { buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1, 0 } );
+    buildData.generator->GenUniformGrid3D( ctx, buildData.pos.x() - 1, buildData.pos.y() - 1, buildData.pos.z() - 1,
                                            SIZE_GEN, SIZE_GEN, SIZE_GEN, buildData.frequency, buildData.seed );
     auto                    densityValues = density.begin();
     FastNoise::OutputMinMax minMax        = ctx.minMax;
@@ -596,38 +598,44 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildVoxel3DMesh( con
 
                         if( densityValues[noiseIdx + STEP_X] > buildData.isoSurface ) // Right
                         {
-                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, STEP_X, STEP_Y, STEP_Z, xLight,
-                                       Vector3( xf + 1, yf, zf ), Vector3( xf + 1, yf + 1, zf ), Vector3( xf + 1, yf + 1, zf + 1 ), Vector3( xf + 1, yf, zf + 1 ) );
+                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, STEP_X,
+                                       STEP_Y, STEP_Z, xLight, Vector3( xf + 1, yf, zf ), Vector3( xf + 1, yf + 1, zf ),
+                                       Vector3( xf + 1, yf + 1, zf + 1 ), Vector3( xf + 1, yf, zf + 1 ) );
                         }
 
                         if( densityValues[noiseIdx - STEP_X] > buildData.isoSurface ) // Left
                         {
-                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, -STEP_X, -STEP_Y, STEP_Z, 1.0f - xLight,
-                                       Vector3( xf, yf + 1, zf ), Vector3( xf, yf, zf ), Vector3( xf, yf, zf + 1 ), Vector3( xf, yf + 1, zf + 1 ) );
+                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, -STEP_X,
+                                       -STEP_Y, STEP_Z, 1.0f - xLight, Vector3( xf, yf + 1, zf ), Vector3( xf, yf, zf ),
+                                       Vector3( xf, yf, zf + 1 ), Vector3( xf, yf + 1, zf + 1 ) );
                         }
 
                         if( densityValues[noiseIdx + STEP_Y] > buildData.isoSurface ) // Up
                         {
-                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, STEP_Y, STEP_Z, STEP_X, yLight,
-                                       Vector3( xf, yf + 1, zf ), Vector3( xf, yf + 1, zf + 1 ), Vector3( xf + 1, yf + 1, zf + 1 ), Vector3( xf + 1, yf + 1, zf ) );
+                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, STEP_Y,
+                                       STEP_Z, STEP_X, yLight, Vector3( xf, yf + 1, zf ), Vector3( xf, yf + 1, zf + 1 ),
+                                       Vector3( xf + 1, yf + 1, zf + 1 ), Vector3( xf + 1, yf + 1, zf ) );
                         }
 
                         if( densityValues[noiseIdx - STEP_Y] > buildData.isoSurface ) // Down
                         {
-                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, -STEP_Y, -STEP_Z, STEP_X, 1.0f - yLight,
-                                       Vector3( xf, yf, zf + 1 ), Vector3( xf, yf, zf ), Vector3( xf + 1, yf, zf ), Vector3( xf + 1, yf, zf + 1 ) );
+                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, -STEP_Y,
+                                       -STEP_Z, STEP_X, 1.0f - yLight, Vector3( xf, yf, zf + 1 ), Vector3( xf, yf, zf ),
+                                       Vector3( xf + 1, yf, zf ), Vector3( xf + 1, yf, zf + 1 ) );
                         }
 
                         if( densityValues[noiseIdx + STEP_Z] > buildData.isoSurface ) // Forward
                         {
-                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, STEP_Z, STEP_X, STEP_Y, zLight,
-                                       Vector3( xf, yf, zf + 1 ), Vector3( xf + 1, yf, zf + 1 ), Vector3( xf + 1, yf + 1, zf + 1 ), Vector3( xf, yf + 1, zf + 1 ) );
+                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, STEP_Z,
+                                       STEP_X, STEP_Y, zLight, Vector3( xf, yf, zf + 1 ), Vector3( xf + 1, yf, zf + 1 ),
+                                       Vector3( xf + 1, yf + 1, zf + 1 ), Vector3( xf, yf + 1, zf + 1 ) );
                         }
 
                         if( densityValues[noiseIdx - STEP_Z] > buildData.isoSurface ) // Back
                         {
-                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, -STEP_Z, -STEP_X, STEP_Y, 1.0f - zLight,
-                                       Vector3( xf + 1, yf, zf ), Vector3( xf, yf, zf ), Vector3( xf, yf + 1, zf ), Vector3( xf + 1, yf + 1, zf ) );
+                            AddQuadAO( vertexData, indicies, densityValues, buildData.isoSurface, noiseIdx, -STEP_Z,
+                                       -STEP_X, STEP_Y, 1.0f - zLight, Vector3( xf + 1, yf, zf ), Vector3( xf, yf, zf ),
+                                       Vector3( xf, yf + 1, zf ), Vector3( xf + 1, yf + 1, zf ) );
                         }
                     }
                     else
@@ -647,8 +655,10 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildVoxel3DMesh( con
     return MeshData( buildData.pos, minMax, vertexData, indicies, minAir, maxSolid );
 }
 
-void MeshNoisePreview::Chunk::AddQuadAO( std::vector<VertexData>& verts, std::vector<uint32_t>& indicies, const float* density, float isoSurface,
-                                         int32_t idx, int32_t facingOffset, int32_t offsetA, int32_t offsetB, float light, Vector3 pos00, Vector3 pos01, Vector3 pos11, Vector3 pos10 )
+void MeshNoisePreview::Chunk::AddQuadAO( std::vector<VertexData>& verts, std::vector<uint32_t>& indicies,
+                                         const float* density, float isoSurface, int32_t idx, int32_t facingOffset,
+                                         int32_t offsetA, int32_t offsetB, float light, Vector3 pos00, Vector3 pos01,
+                                         Vector3 pos11, Vector3 pos10 )
 {
     int32_t facingIdx = idx + facingOffset;
 
@@ -688,7 +698,9 @@ void MeshNoisePreview::Chunk::AddQuadAO( std::vector<VertexData>& verts, std::ve
     indicies.push_back( vertIdx + 1 );
 }
 
-MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData& buildData, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
+MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData&         buildData,
+                                                                                 std::vector<VertexData>& vertexData,
+                                                                                 std::vector<uint32_t>&   indicies )
 {
 
 
@@ -699,28 +711,25 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
     FastNoise::Buffer             density( 32, nbVertX * nbVertY );
     FastNoise::Generator::Context ctx( density, { buildData.offset.x(), buildData.offset.y(), 0, 0 } );
     FastNoise::OutputMinMax       minMax;
-    ctx.totalPlanes[0] = buildData.heightmapPlanes[0];
-    ctx.totalPlanes[1] = buildData.heightmapPlanes[1];
-    std::vector<int> ranges( (size_t)buildData.heightmapSize[1] );
+    std::vector<int>              ranges( (size_t)buildData.heightmapSize[1] );
     std::iota( std::begin( ranges ), std::end( ranges ), 0 );
 
-    auto patchCount  = (size_t)buildData.heightmapPlanes[1] * (size_t)buildData.heightmapPlanes[0] * (size_t)buildData.heightmapSize[1] * (size_t)buildData.heightmapSize[0];
+    auto patchCount  = (size_t)buildData.heightmapSize[1] * (size_t)buildData.heightmapSize[0];
     auto vertexCount = patchCount * 4;
     auto indexCount  = patchCount * 6;
 
     vertexData.resize( vertexCount );
     indicies.resize( indexCount );
 
-    for( int py = 0; py < buildData.heightmapPlanes[1]; ++py )
+    for( int py = 0; py < 1; ++py )
     {
         ctx.planeId[1] = py;
-        for( int px = 0; px < buildData.heightmapPlanes[0]; ++px )
+        for( int px = 0; px < 1; ++px )
         {
             auto offset    = buildData.offset + Magnum::Vector2i( px * sizeX, (float)py * sizeY );
             ctx.planeId[0] = px;
-            buildData.generator->GenUniformGrid2D( ctx,
-                                                   offset.x(), offset.y(),
-                                                   nbVertX, nbVertY, buildData.frequency, buildData.seed );
+            buildData.generator->GenUniformGrid2D( ctx, offset.x(), offset.y(), nbVertX, nbVertY, buildData.frequency,
+                                                   buildData.seed );
             auto densityValues = density.begin();
 
             minMax << ctx.minMax;
@@ -729,8 +738,9 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
 
             // Vector3 sunLight = LIGHT_DIR.normalized() * ( 1.0f - AMBIENT_LIGHT ) + Vector3( AMBIENT_LIGHT );
 
-            int32_t planeId     = py * buildData.heightmapPlanes[0] + px;
-            size_t  patchOffset = (size_t)planeId * (size_t)buildData.heightmapSize[1] * (size_t)buildData.heightmapSize[0];
+            int32_t planeId = 0;
+            size_t  patchOffset =
+                (size_t)planeId * (size_t)buildData.heightmapSize[1] * (size_t)buildData.heightmapSize[0];
             std::for_each( std::execution::par, ranges.begin(), ranges.end(), [&, STEP_X, STEP_Y]( int y ) {
                 float yf = ( y + offset.y() );
 
@@ -741,7 +751,8 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
                     Vector3 v00( xf, densityValues[noiseIdx] * buildData.heightmapMultiplier, yf );
                     Vector3 v01( xf, densityValues[noiseIdx + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
                     Vector3 v10( xf + 1, densityValues[noiseIdx + STEP_X] * buildData.heightmapMultiplier, yf );
-                    Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y] * buildData.heightmapMultiplier, yf + 1 );
+                    Vector3 v11( xf + 1, densityValues[noiseIdx + STEP_X + STEP_Y] * buildData.heightmapMultiplier,
+                                 yf + 1 );
 
                     uint32_t triRotation = 2 * ( ( v00 + v11 ).dot() < ( v01 + v10 ).dot() );
 
@@ -754,14 +765,20 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
                     normal[triRotation] += normal[3];
                     normal[1] += normal[3];
 
-                    uint32_t vertIdx     = (uint32_t)( patchOffset + (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 4;
-                    auto     vertexStart = vertexData.data() + vertIdx;
-                    auto     indexStart  = indicies.data() + ( patchOffset + (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 6;
+                    uint32_t vertIdx =
+                        (uint32_t)( patchOffset + (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 4;
+                    auto vertexStart = vertexData.data() + vertIdx;
+                    auto indexStart  = indicies.data() +
+                        ( patchOffset + (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 6;
 #ifdef HAS_TRUE_NORMAL
-                    vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ), normal[0].normalized() );
-                    vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ), normal[1].normalized() );
-                    vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ), normal[2].normalized() );
-                    vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ), normal[3].normalized() );
+                    vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ),
+                                                 normal[0].normalized() );
+                    vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ),
+                                                 normal[1].normalized() );
+                    vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ),
+                                                 normal[2].normalized() );
+                    vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ),
+                                                 normal[3].normalized() );
 
 #else
 
@@ -794,15 +811,17 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
     return MeshData( buildData.pos, minMax, vertexData, indicies );
 }
 
-MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData& buildData, FastNoise::Buffer& density, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies )
+MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh( const BuildData&         buildData,
+                                                                                 FastNoise::Buffer&       density,
+                                                                                 std::vector<VertexData>& vertexData,
+                                                                                 std::vector<uint32_t>&   indicies )
 {
     constexpr uint32_t            SIZE_GEN_HEIGHTMAP = SIZE + 1;
     FastNoise::Generator::Context ctx( density, { buildData.pos.x(), buildData.pos.z(), 0, 0 } );
     auto                          densityValues = density.begin();
 
-    buildData.generator->GenUniformGrid2D( ctx,
-                                           buildData.pos.x(), buildData.pos.z(),
-                                           SIZE_GEN_HEIGHTMAP, SIZE_GEN_HEIGHTMAP, buildData.frequency, buildData.seed );
+    buildData.generator->GenUniformGrid2D( ctx, buildData.pos.x(), buildData.pos.z(), SIZE_GEN_HEIGHTMAP,
+                                           SIZE_GEN_HEIGHTMAP, buildData.frequency, buildData.seed );
     FastNoise::OutputMinMax minMax = ctx.minMax;
     constexpr int32_t       STEP_X = 1;
     constexpr int32_t       STEP_Y = SIZE_GEN_HEIGHTMAP;
@@ -845,10 +864,14 @@ MeshNoisePreview::Chunk::MeshData MeshNoisePreview::Chunk::BuildHeightMap2DMesh(
             auto     vertexStart = vertexData.data() + vertIdx;
             auto     indexStart  = indicies.data() + ( (size_t)y * (size_t)buildData.heightmapSize[0] + (size_t)x ) * 6;
 #ifdef HAS_TRUE_NORMAL
-            vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ), normal[0].normalized() );
-            vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ), normal[1].normalized() );
-            vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ), normal[2].normalized() );
-            vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ), normal[3].normalized() );
+            vertexStart[0] = VertexData( v00, CompressNormal( normal[0].normalized(), buildData.compressPrec ),
+                                         normal[0].normalized() );
+            vertexStart[1] = VertexData( v01, CompressNormal( normal[1].normalized(), buildData.compressPrec ),
+                                         normal[1].normalized() );
+            vertexStart[2] = VertexData( v10, CompressNormal( normal[2].normalized(), buildData.compressPrec ),
+                                         normal[2].normalized() );
+            vertexStart[3] = VertexData( v11, CompressNormal( normal[3].normalized(), buildData.compressPrec ),
+                                         normal[3].normalized() );
 
 #else
 
@@ -890,9 +913,11 @@ MeshNoisePreview::Chunk::Chunk( MeshData& meshData )
         mMesh = std::make_unique<GL::Mesh>( GL::MeshPrimitive::Triangles );
 
 #ifdef HAS_TRUE_NORMAL
-        mMesh->addVertexBuffer( GL::Buffer( GL::Buffer::TargetHint::Array, meshData.vertexData ), 0, VertexLightShader::PositionLight {}, VertexLightShader::Normal {} );
+        mMesh->addVertexBuffer( GL::Buffer( GL::Buffer::TargetHint::Array, meshData.vertexData ), 0,
+                                VertexLightShader::PositionLight {}, VertexLightShader::Normal {} );
 #else
-        mMesh->addVertexBuffer( GL::Buffer( GL::Buffer::TargetHint::Array, meshData.vertexData ), 0, VertexLightShader::PositionLight {} );
+        mMesh->addVertexBuffer( GL::Buffer( GL::Buffer::TargetHint::Array, meshData.vertexData ), 0,
+                                VertexLightShader::PositionLight {} );
 #endif
         if( meshData.indicies.empty() )
         {
@@ -901,7 +926,8 @@ MeshNoisePreview::Chunk::Chunk( MeshData& meshData )
         else
         {
             mMesh->setCount( (Int)meshData.indicies.size() );
-            mMesh->setIndexBuffer( GL::Buffer( GL::Buffer::TargetHint::ElementArray, meshData.indicies ), 0, GL::MeshIndexType::UnsignedInt, 0, (UnsignedInt)meshData.vertexData.size() - 1 );
+            mMesh->setIndexBuffer( GL::Buffer( GL::Buffer::TargetHint::ElementArray, meshData.indicies ), 0,
+                                   GL::MeshIndexType::UnsignedInt, 0, (UnsignedInt)meshData.vertexData.size() - 1 );
         }
     }
 
@@ -923,18 +949,18 @@ void MeshNoisePreview::VertexLightShader::ContinueDefaultBuild( Type type )
     Utility::Resource noiseToolResources( "NoiseTool" );
 
 #ifndef MAGNUM_TARGET_GLES
-    const GL::Version version = GL::Context::current().supportedVersion( { GL::Version::GL320, GL::Version::GL310, GL::Version::GL300, GL::Version::GL210 } );
+    const GL::Version version = GL::Context::current().supportedVersion(
+        { GL::Version::GL320, GL::Version::GL310, GL::Version::GL300, GL::Version::GL210 } );
 #else
-    const GL::Version version = GL::Context::current().supportedVersion( { GL::Version::GLES300, GL::Version::GLES200 } );
+    const GL::Version version =
+        GL::Context::current().supportedVersion( { GL::Version::GLES300, GL::Version::GLES200 } );
 #endif
 
     GL::Shader vert = CreateShader( version, GL::Shader::Type::Vertex, type );
     GL::Shader frag = CreateShader( version, GL::Shader::Type::Fragment, type );
 
-    CORRADE_INTERNAL_ASSERT_OUTPUT(
-        vert.addSource( noiseToolResources.get( "VertexLight.vert" ) ).compile() );
-    CORRADE_INTERNAL_ASSERT_OUTPUT(
-        frag.addSource( noiseToolResources.get( "VertexLight.frag" ) ).compile() );
+    CORRADE_INTERNAL_ASSERT_OUTPUT( vert.addSource( noiseToolResources.get( "VertexLight.vert" ) ).compile() );
+    CORRADE_INTERNAL_ASSERT_OUTPUT( frag.addSource( noiseToolResources.get( "VertexLight.frag" ) ).compile() );
 
     attachShader( vert );
     attachShader( frag );
@@ -978,7 +1004,9 @@ void MeshNoisePreview::VertexLightShader::ContinueDefaultBuild( Type type )
     {
         mHeightColors[i] = GL::Texture1D();
         mHeightColors[i].bind( i );
-        mHeightColors[i].setStorage( 5, GL::TextureFormat::RGBA8, MaxHeightmapColorMapRes ).setSubImage( 0, {}, heightMapImage );
+        mHeightColors[i]
+            .setStorage( 5, GL::TextureFormat::RGBA8, MaxHeightmapColorMapRes )
+            .setSubImage( 0, {}, heightMapImage );
         mHeightColors[i].generateMipmap();
 
         setUniform( mHeightColorMapUniform[i], i );
@@ -999,7 +1027,8 @@ GL::Shader MeshNoisePreview::VertexLightShader::CreateShader( GL::Version versio
 #endif
 
 #ifndef MAGNUM_TARGET_GLES2
-    if( type == GL::Shader::Type::Vertex && GL::Context::current().isExtensionDisabled<GL::Extensions::MAGNUM::shader_vertex_id>( version ) )
+    if( type == GL::Shader::Type::Vertex &&
+        GL::Context::current().isExtensionDisabled<GL::Extensions::MAGNUM::shader_vertex_id>( version ) )
         shader.addSource( "#define DISABLE_GL_MAGNUM_shader_vertex_id\n" );
 #endif
 
@@ -1023,19 +1052,22 @@ GL::Shader MeshNoisePreview::VertexLightShader::CreateShader( GL::Version versio
     return shader;
 }
 
-MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetTransformationProjectionMatrix( const Matrix4& matrix )
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetTransformationProjectionMatrix(
+    const Matrix4& matrix )
 {
     setUniform( mTransformationProjectionMatrixUniform, matrix );
     return *this;
 }
 
-MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetHeightMinMax( float iHeightMin, float iHeightMax )
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetHeightMinMax( float iHeightMin,
+                                                                                           float iHeightMax )
 {
     setUniform( mHeightMinMax, Vector2( iHeightMin, iHeightMax ) );
     return *this;
 }
 
-MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetSunIntensity( Color3 color, float intensity )
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetSunIntensity( Color3 color,
+                                                                                           float  intensity )
 {
     setUniform( mSunColor, Vector4( color, intensity ) );
     return *this;
@@ -1057,7 +1089,8 @@ MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetRen
     return *this;
 }
 
-MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetHeightColorMap( ColorLayerValue const& colorMap )
+MeshNoisePreview::VertexLightShader& MeshNoisePreview::VertexLightShader::SetHeightColorMap(
+    ColorLayerValue const& colorMap )
 {
     std::array<std::uint32_t, MaxHeightmapColorMapRes> data;
 
@@ -1109,7 +1142,10 @@ void MeshNoisePreview::StartTimer()
 
 float MeshNoisePreview::GetTimerDurationMs()
 {
-    return std::chrono::duration_cast<std::chrono::microseconds>( std::chrono::high_resolution_clock::now() - mTimerStart ).count() / 1e3f;
+    return std::chrono::duration_cast<std::chrono::microseconds>( std::chrono::high_resolution_clock::now() -
+                                                                  mTimerStart )
+               .count() /
+        1e3f;
 }
 
 void MeshNoisePreview::SetupSettingsHandlers()
@@ -1130,16 +1166,20 @@ void MeshNoisePreview::SetupSettingsHandlers()
         outBuf->appendf( "color=%d\n", (int)meshNoisePreview->mBuildData.sunColor.toSrgbInt() );
         outBuf->appendf( "mesh_type=%d\n", (int)meshNoisePreview->mBuildData.meshType );
         outBuf->appendf( "enabled=%d\n", (int)meshNoisePreview->mEnabled );
-        outBuf->appendf( "planes=%d:%d\n", meshNoisePreview->mBuildData.heightmapPlanes[0], meshNoisePreview->mBuildData.heightmapPlanes[1] );
-        outBuf->appendf( "size=%d:%d\n", meshNoisePreview->mBuildData.heightmapSize[0], meshNoisePreview->mBuildData.heightmapSize[1] );
-        outBuf->appendf( "sun_rotation=%f:%f\n", meshNoisePreview->mBuildData.sunRotation.theta, meshNoisePreview->mBuildData.sunRotation.phi );
+        outBuf->appendf( "offset=%d:%d\n", meshNoisePreview->mBuildData.offset.x(),
+                         meshNoisePreview->mBuildData.offset.y() );
+        outBuf->appendf( "size=%d:%d\n", meshNoisePreview->mBuildData.heightmapSize[0],
+                         meshNoisePreview->mBuildData.heightmapSize[1] );
+        outBuf->appendf( "sun_rotation=%f:%f\n", meshNoisePreview->mBuildData.sunRotation.theta,
+                         meshNoisePreview->mBuildData.sunRotation.phi );
         outBuf->appendf( "draw_style=%d\n", meshNoisePreview->mBuildData.compressPrec );
         outBuf->appendf( "sun_intensity=%f\n", meshNoisePreview->mBuildData.sunIntensity );
         for( auto& [color, active]: meshNoisePreview->mBuildData.strataColorPerHeight )
         {
             if( active )
             {
-                outBuf->appendf( "strata_color=%d:%d:%d\n", (int)color[0].toSrgbAlphaInt(), (int)color[1].toSrgbAlphaInt(), (int)color[2].toSrgbAlphaInt() );
+                outBuf->appendf( "strata_color=%d:%d:%d\n", (int)color[0].toSrgbAlphaInt(),
+                                 (int)color[1].toSrgbAlphaInt(), (int)color[2].toSrgbAlphaInt() );
             }
         }
     };
@@ -1160,9 +1200,12 @@ void MeshNoisePreview::SetupSettingsHandlers()
         sscanf( line, "heightmap_multiplier=%f", &meshNoisePreview->mBuildData.heightmapMultiplier );
         sscanf( line, "seed=%d", &meshNoisePreview->mBuildData.seed );
         sscanf( line, "mesh_type=%d", (int*)&meshNoisePreview->mBuildData.meshType );
-        sscanf( line, "planes=%d:%d", meshNoisePreview->mBuildData.heightmapPlanes, meshNoisePreview->mBuildData.heightmapPlanes + 1 );
-        sscanf( line, "size=%d:%d", meshNoisePreview->mBuildData.heightmapSize, meshNoisePreview->mBuildData.heightmapSize + 1 );
-        sscanf( line, "sun_rotation=%f:%f", &meshNoisePreview->mBuildData.sunRotation.theta, &meshNoisePreview->mBuildData.sunRotation.phi );
+        sscanf( line, "offset=%d:%d", &meshNoisePreview->mBuildData.offset.x(),
+                &meshNoisePreview->mBuildData.offset.y() );
+        sscanf( line, "size=%d:%d", meshNoisePreview->mBuildData.heightmapSize,
+                meshNoisePreview->mBuildData.heightmapSize + 1 );
+        sscanf( line, "sun_rotation=%f:%f", &meshNoisePreview->mBuildData.sunRotation.theta,
+                &meshNoisePreview->mBuildData.sunRotation.phi );
         sscanf( line, "draw_style=%d", &meshNoisePreview->mBuildData.compressPrec );
         sscanf( line, "sun_intensity=%f", &meshNoisePreview->mBuildData.sunIntensity );
 
@@ -1178,13 +1221,16 @@ void MeshNoisePreview::SetupSettingsHandlers()
         }
         else if( sscanf( line, "strata_color=%d:%d:%d", &cl[0], &cl[1], &cl[2] ) == 3 )
         {
-            meshNoisePreview->mBuildData.strataColorPerHeight.emplace_back(
-                Color4x3 { Color4::fromSrgbAlpha( cl[0] ), Color4::fromSrgbAlpha( cl[1] ), Color4::fromSrgbAlpha( cl[2] ) }, true );
+            meshNoisePreview->mBuildData.strataColorPerHeight.emplace_back( Color4x3 { Color4::fromSrgbAlpha( cl[0] ),
+                                                                                       Color4::fromSrgbAlpha( cl[1] ),
+                                                                                       Color4::fromSrgbAlpha( cl[2] ) },
+                                                                            true );
         }
     };
     editorSettings.ApplyAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler ) {
         auto* meshNoisePreview = (MeshNoisePreview*)handler->UserData;
-        meshNoisePreview->mShader->SetSunIntensity( meshNoisePreview->mBuildData.sunColor, meshNoisePreview->mBuildData.sunIntensity );
+        meshNoisePreview->mShader->SetSunIntensity( meshNoisePreview->mBuildData.sunColor,
+                                                    meshNoisePreview->mBuildData.sunIntensity );
         meshNoisePreview->mShader->SetHeightColorMap( meshNoisePreview->mBuildData.strataColorPerHeight );
         meshNoisePreview->mShader->SetRenderStyle( meshNoisePreview->mBuildData.compressPrec );
         meshNoisePreview->mShader->SetSunDirection( meshNoisePreview->mBuildData.sunRotation.toDir() );

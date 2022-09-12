@@ -30,6 +30,11 @@ namespace Magnum
 
         static const char* GetSIMDLevelName( FastSIMD::eLevel lvl );
 
+        Vector2i GetMeshGridSize() const
+        {
+            return mMeshNoisePreview.GetGridSize();
+        }
+
     private:
         struct Node
         {

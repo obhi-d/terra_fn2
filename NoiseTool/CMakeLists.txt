@@ -87,12 +87,38 @@ CPMAddPackage(
     EXCLUDE_FROM_ALL YES
 )
 
+CPMAddPackage(
+    NAME zlib
+    GITHUB_REPOSITORY madler/zlib
+    GIT_TAG 21767c654d31d2dccdde4330529775c6c5fd5389
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "BUILD_STATIC ON"
+)
+
+set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+set(PNG_BUILD_ZLIB ON CACHE BOOL "Custom zlib Location, else find_package is used")
+include_directories(ZLIB_INCLUDE_DIRS)
+
+CPMAddPackage(
+    NAME libpng
+    GITHUB_REPOSITORY glennrp/libpng
+    GIT_TAG 763c77e628e2c78b4c422bb7e26327d28ee54ad4
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "PNG_STATIC ON"
+        "PNG_SHARED OFF"
+        "PNG_EXECUTABLES OFF"
+        "PNG_TESTS OFF"
+)
+
 # Use modules from magnum-integration since it has everything we need
 set(CMAKE_MODULE_PATH "${magnum-integration_SOURCE_DIR}/modules" ${CMAKE_MODULE_PATH})
 
 find_package(Magnum REQUIRED GL GlfwApplication Trade)
 find_package(MagnumIntegration REQUIRED ImGui)
 find_package(ImGui REQUIRED SourcesMiscCpp)
+find_package(libpng REQUIRED)
 
 # Ensure FastNoise.dll is built into the same dir as NoiseTool.exe
 set_target_properties(FastNoise
@@ -121,8 +147,11 @@ add_executable(NoiseTool
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
 target_include_directories(NoiseTool PRIVATE 
-    "${imnodes_SOURCE_DIR}")
+    "${imnodes_SOURCE_DIR}"
+    "${libpng_SOURCE_DIR}"
+    "${libpng_BINARY_DIR}")
 
+message("PNG Include: "${libpng_BINARY_DIR} )
 target_link_libraries(NoiseTool PRIVATE
     FastNoise
     Magnum::Application
@@ -132,6 +161,8 @@ target_link_libraries(NoiseTool PRIVATE
     MagnumIntegration::ImGui
     ImGui::SourcesMiscCpp
     robin_hood
+    zlib
+    png_static
 )
 add_dependencies(NoiseTool MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
 # Windows HiDPI support

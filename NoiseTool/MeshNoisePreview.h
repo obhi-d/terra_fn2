@@ -34,7 +34,13 @@ namespace Magnum
 
         void ReGenerate( FastNoise::SmartNodeArg<> generator );
 
-        void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition, const Vector2i& noiseOffset );
+        void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition );
+
+
+        Vector2i GetGridSize() const
+        {
+            return Vector2i( mBuildData.heightmapSize[0], mBuildData.heightmapSize[1] );
+        }
 
     private:
         enum MeshType
@@ -45,10 +51,9 @@ namespace Magnum
             MeshType_Count
         };
 
-        inline static const char* MeshTypeStrings =
-            "Voxel 3D\0"
-            "Heightmap 2D\0"
-            "Heightmap Output Preview\0";
+        inline static const char* MeshTypeStrings = "Voxel 3D\0"
+                                                    "Heightmap 2D\0"
+                                                    "Heightmap Output Preview\0";
 
         using Color4x3        = std::array<Color4, 3>;
         using ColorLayerValue = std::vector<std::tuple<Color4x3, bool>>;
@@ -83,8 +88,7 @@ namespace Magnum
 
             explicit VertexLightShader();
             explicit VertexLightShader( Voxel3D );
-            explicit VertexLightShader( NoCreateT ) noexcept :
-                AbstractShaderProgram { NoCreate }
+            explicit VertexLightShader( NoCreateT ) noexcept : AbstractShaderProgram { NoCreate }
             {
             }
 
@@ -126,16 +130,14 @@ namespace Magnum
             struct VertexData
             {
                 VertexData() = default;
-                VertexData( Vector3 p, float c ) :
-                    posLight( p, c )
+                VertexData( Vector3 p, float c ) : posLight( p, c )
                 {
                 }
 
 
                 Vector4 posLight;
 #ifdef HAS_TRUE_NORMAL
-                VertexData( Vector3 p, float c, Vector3 n ) :
-                    posLight( p, c ), normal( n, 1.0f )
+                VertexData( Vector3 p, float c, Vector3 n ) : posLight( p, c ), normal( n, 1.0f )
                 {
                 }
                 Vector4 normal;
@@ -146,9 +148,8 @@ namespace Magnum
             {
                 MeshData() = default;
 
-                MeshData( Vector3i p, FastNoise::OutputMinMax mm,
-                          const std::vector<VertexData>& v, const std::vector<uint32_t>& i,
-                          float minAir = INFINITY, float maxSolid = -INFINITY ) :
+                MeshData( Vector3i p, FastNoise::OutputMinMax mm, const std::vector<VertexData>& v,
+                          const std::vector<uint32_t>& i, float minAir = INFINITY, float maxSolid = -INFINITY ) :
                     pos( p ),
                     minMax( mm ), minAirY( minAir ), maxSolidY( maxSolid )
                 {
@@ -207,14 +208,21 @@ namespace Magnum
 
                 ColorLayerValue strataColorPerHeight;
                 Vector2i        offset;
-                int32_t         heightmapSize[2]   = { SIZE, SIZE };
-                int32_t         heightmapPlanes[2] = { 4, 4 };
+                int32_t         heightmapSize[2] = { SIZE, SIZE };
             };
 
             static MeshData                          BuildMeshData( const BuildData& buildData );
-            static MeshNoisePreview::Chunk::MeshData BuildVoxel3DMesh( const BuildData& buildData, FastNoise::Buffer& densityValues, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies );
-            static MeshNoisePreview::Chunk::MeshData BuildHeightMap2DMesh( const BuildData& buildData, FastNoise::Buffer& densityValues, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies );
-            static MeshNoisePreview::Chunk::MeshData BuildHeightMap2DMesh( const BuildData& buildData, std::vector<VertexData>& vertexData, std::vector<uint32_t>& indicies );
+            static MeshNoisePreview::Chunk::MeshData BuildVoxel3DMesh( const BuildData&         buildData,
+                                                                       FastNoise::Buffer&       densityValues,
+                                                                       std::vector<VertexData>& vertexData,
+                                                                       std::vector<uint32_t>&   indicies );
+            static MeshNoisePreview::Chunk::MeshData BuildHeightMap2DMesh( const BuildData&         buildData,
+                                                                           FastNoise::Buffer&       densityValues,
+                                                                           std::vector<VertexData>& vertexData,
+                                                                           std::vector<uint32_t>&   indicies );
+            static MeshNoisePreview::Chunk::MeshData BuildHeightMap2DMesh( const BuildData&         buildData,
+                                                                           std::vector<VertexData>& vertexData,
+                                                                           std::vector<uint32_t>&   indicies );
 
             Chunk( MeshData& meshData );
 
@@ -228,8 +236,10 @@ namespace Magnum
             }
 
         private:
-            static void AddQuadAO( std::vector<VertexData>& verts, std::vector<uint32_t>& indicies, const float* density, float isoSurface,
-                                   int32_t idx, int32_t facingIdx, int32_t offsetA, int32_t offsetB, float light, Vector3 pos00, Vector3 pos01, Vector3 pos11, Vector3 pos10 );
+            static void AddQuadAO( std::vector<VertexData>& verts, std::vector<uint32_t>& indicies,
+                                   const float* density, float isoSurface, int32_t idx, int32_t facingIdx,
+                                   int32_t offsetA, int32_t offsetB, float light, Vector3 pos00, Vector3 pos01,
+                                   Vector3 pos11, Vector3 pos10 );
 
             static constexpr uint32_t SIZE_GEN = SIZE + 2;
 
@@ -241,14 +251,13 @@ namespace Magnum
         {
             size_t operator()( const Vector3i& v ) const
             {
-                return robin_hood::hash<size_t>()(
-                    (size_t)v.x() ^
-                    ( (size_t)v.y() << sizeof( size_t ) * 2 ) ^
-                    ( (size_t)v.z() << sizeof( size_t ) * 4 ) );
+                return robin_hood::hash<size_t>()( (size_t)v.x() ^ ( (size_t)v.y() << sizeof( size_t ) * 2 ) ^
+                                                   ( (size_t)v.z() << sizeof( size_t ) * 4 ) );
             }
         };
 
-        static void GenerateLoopThread( GenerateQueue<Chunk::BuildData>& generateQueue, CompleteQueue<Chunk::MeshData>& completeQueue );
+        static void GenerateLoopThread( GenerateQueue<Chunk::BuildData>& generateQueue,
+                                        CompleteQueue<Chunk::MeshData>&  completeQueue );
 
         void  CreateChunksForStaticHeightMap( bool regen );
         void  UpdateChunksForPosition( Vector3 position );

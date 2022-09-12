@@ -133,17 +133,21 @@ namespace Magnum
 
         template<typename Wrapper>
         static TextureData BuildTexture( const BuildData& buildData, Magnum::Vector4 offset );
-        static void        BuildTerrainDataRAW( std::vector<std::int16_t>& buffer, const BuildData& buildData,
+        static void        BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData,
+                                                Magnum::Vector4 offset );
+        static void        BuildTerrainDataRAW( std::vector<std::uint8_t>& buffer, const BuildData& buildData,
                                                 Magnum::Vector4 offset );
         static void        GenerateLoopThread( GenerateQueue<BuildData>&   generateQueue,
                                                CompleteQueue<TextureData>& completeQueue );
 
-        void DoExport();
+        void DoExport( Vector2i gridSize );
         void DoExportRAW();
         void DoExportBMP();
+        void DoExportPNG();
         void SetupSettingsHandlers();
         void SetPreviewTexture( ImageView2D& imageView );
 
+        bool            mDisableGrid = false;
         std::string     mName;
         std::atomic_int mExportProgress = 0;
         std::string     mStatus;

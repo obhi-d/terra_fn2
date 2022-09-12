@@ -2,6 +2,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include <png.h>
+
 #define IMGUI_DEFINE_MATH_OPERATORS
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -18,6 +20,7 @@
 #include "ImGuiExtra.h"
 #include "NoiseTexture.h"
 
+#include "IconsFontAwesome6.h"
 #include "ImGuiFileDialog.h"
 
 using namespace Magnum;
@@ -69,12 +72,12 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
         texData.Free();
     }
 
+    auto GridSize = iParent->GetMeshGridSize();
+
     ImGui::SetNextWindowSize( ImVec2( 768, 768 ), ImGuiCond_FirstUseEver );
     ImGui::SetNextWindowPos( ImVec2( 1143, 305 ), ImGuiCond_FirstUseEver );
     if( ImGui::Begin( "Texture Preview", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
     {
-        // ImGui::Text( "Min: %0.6f Max: %0.6f", mMinMax.min, mMinMax.max );
-
         ImGui::PushItemWidth( 82.0f );
         bool edited = false;
 
@@ -87,7 +90,7 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
 
         Vector2i texSize = { mBuildData.size.x(), mBuildData.size.y() };
 
-        if( ImGui::DragInt2( "Size", texSize.data(), 2, 4, 8192 ) )
+        if( ImGui::DragInt2( ICON_FA_HAND, texSize.data(), 2, 4, 8192 ) )
         {
             ImVec2 delta( Vector2 { texSize - mBuildData.size } );
 
@@ -113,20 +116,18 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
             mStatus += "%";
         }
 
-        if( mBuildData.generator && ImGui::Button( "Export BMP" ) )
+        ImGui::SameLine();
+
+        if( mBuildData.generator && ImGui::Button( ICON_FA_BULLSEYE ) )
         {
-            auto size             = mExportBuildData.size;
-            mExportBuildData      = mBuildData;
-            mExportBuildData.size = size;
-            ImGui::OpenPopup( "Export BMP" );
-            mStatus = "Exporting BMP";
-            if( iParent )
-                iParent->AddHistoryRecord();
+            mBuildData.offset.x() = -contentSize.x / 2;
+            mBuildData.offset.y() = -contentSize.y / 2;
+
+            ReGenerate( mBuildData.generator );
         }
 
         ImGui::SameLine();
-
-        if( mBuildData.generator && ImGui::Button( "Export RAW" ) )
+        if( mBuildData.generator && ImGui::Button( ICON_FA_FILE_EXPORT ) )
         {
             auto size                       = mExportBuildData.size;
             auto path                       = mExportBuildData.path;
@@ -135,15 +136,31 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
             mExportBuildData.size           = size;
             mExportBuildData.path           = path;
             mExportBuildData.numberOfPlanes = nbPlanes;
-            ImGui::OpenPopup( "Export RAW" );
-            mStatus = "Exporting RAW terrain data";
+            ImGui::OpenPopup( "Export PNG" );
+            mStatus = "Exporting PNG terrain data";
+            if( iParent )
+                iParent->AddHistoryRecord();
+        }
+
+        ImGui::SameLine();
+        if( mBuildData.generator && ImGui::Button( ICON_FA_FILE_IMAGE ) )
+        {
+            auto size                       = mExportBuildData.size;
+            auto path                       = mExportBuildData.path;
+            auto nbPlanes                   = mExportBuildData.numberOfPlanes;
+            mExportBuildData                = mBuildData;
+            mExportBuildData.size           = size;
+            mExportBuildData.path           = path;
+            mExportBuildData.numberOfPlanes = nbPlanes;
+            ImGui::OpenPopup( "Export BMP" );
+            mStatus = "Exporting BMP terrain data";
             if( iParent )
                 iParent->AddHistoryRecord();
         }
 
         ImGui::SameLine();
 
-        if( mBuildData.generator && ImGui::Button( "Wait For Export" ) )
+        if( mBuildData.generator && ImGui::Button( ICON_FA_CLOCK ) )
         {
             if( mExportThread.joinable() )
             {
@@ -176,12 +193,17 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
         ImGui::PushStyleColor( ImGuiCol_Button, 0 );
         ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0 );
         ImGui::PushStyleColor( ImGuiCol_ButtonHovered, 0 );
-        ImGuiIntegration::imageButton( mNoiseTexture, Vector2( mNoiseTexture.imageSize( 0 ) ), { {}, Vector2 { 1 } },
-                                       0 );
+
+        auto ImagePos    = ImGui::GetCursorScreenPos();
+        auto RelImagePos = ImGui::GetCursorPos();
+
+        ImGuiIntegration::imageButton( mNoiseTexture, Vector2( mNoiseTexture.imageSize( 0 ) ),
+                                       { { 0.0f, 1.0f }, Vector2 { 1.0f, 0.0f } }, 0 );
         ImGui::PopStyleColor( 3 );
 
         if( ImGui::IsItemHovered() )
         {
+
             Vector4 oldOffset = mBuildData.offset;
 
             if( mBuildData.generationType != GenType_2DTiled && ImGui::IsMouseDragging( ImGuiMouseButton_Left ) )
@@ -190,7 +212,7 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
                 ImGui::ResetMouseDragDelta( ImGuiMouseButton_Left );
 
                 mBuildData.offset.x() -= dragDelta.x();
-                mBuildData.offset.y() += dragDelta.y();
+                mBuildData.offset.y() -= dragDelta.y();
             }
             else if( ( mBuildData.generationType == GenType_3D || mBuildData.generationType == GenType_4D ) &&
                      ImGui::IsMouseDragging( ImGuiMouseButton_Right ) )
@@ -210,17 +232,200 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
             {
                 ReGenerate( mBuildData.generator );
             }
+
+
+            auto mouse = ImGui::GetMousePos();
+            auto delta = mouse - ImagePos;
+
+            auto CoordX = ( mBuildData.offset.x() + delta.x );
+            auto CoordY = ( mBuildData.offset.y() + delta.y );
+
+
+            auto PlaneX = (int)( ( ( std::abs( CoordX ) + GridSize.x() * 0.5f ) / GridSize.x() ) );
+            auto PlaneY = (int)( ( ( std::abs( CoordY ) + GridSize.y() * 0.5f ) / GridSize.y() ) );
+
+            if( CoordX < 0 )
+                PlaneX = -PlaneX;
+            if( CoordY < 0 )
+                PlaneY = -PlaneY;
+
+            ImGui::SetTooltip( "(%d, %d) : (%d, %d)", (int)PlaneX, (int)PlaneY, (int)( CoordX ), (int)CoordY );
         }
 
-        DoExport();
+
+        ImDrawList* DrawList = ImGui::GetWindowDrawList();
+        auto        size     = contentSize;
+
+        // vertical grids
+        auto getMod = []( auto offset, auto size ) {
+            if( offset < 0 )
+                return std::abs( (int)( offset - ( size / 2 ) ) % (int)size );
+            else
+                return (int)size - std::abs( (int)( offset + ( size / 2 ) ) % (int)size );
+        };
+        auto start = getMod( mBuildData.offset.x(), GridSize.x() );
+        while( start < size.x )
+        {
+            DrawList->AddLine( ImVec2( ImagePos.x + start, ImagePos.y ),
+                               ImVec2( ImagePos.x + start, ImagePos.y + size.y ),
+                               ImGui::GetColorU32( ImGuiCol_TextDisabled ) );
+            start += GridSize.x();
+        }
+
+        // horizontal grids
+        start = getMod( mBuildData.offset.y(), GridSize.y() );
+        while( start < size.y )
+        {
+            DrawList->AddLine( ImVec2( ImagePos.x, ImagePos.y + start ),
+                               ImVec2( ImagePos.x + size.x, ImagePos.y + start ),
+                               ImGui::GetColorU32( ImGuiCol_TextDisabled ) );
+            start += GridSize.y();
+        }
+
+        DoExport( GridSize );
     }
     ImGui::End();
 }
 
-void NoiseTexture::DoExport()
+void NoiseTexture::DoExport( Vector2i grid )
 {
+    mExportBuildData.size   = grid;
+    mExportBuildData.offset = Magnum::Vector4( -mExportBuildData.size.x() / 2, -mExportBuildData.size.y() / 2, 0, 0 );
     DoExportBMP();
-    DoExportRAW();
+    // DoExportRAW();
+    DoExportPNG();
+}
+
+void NoiseTexture::DoExportPNG()
+{
+    if( ImGui::BeginPopupModal( "Export PNG", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings ) )
+    {
+
+        ImGui::PushItemWidth( 200.0f );
+
+
+        if( ImGui::DragInt2( "Plane Count", mExportBuildData.numberOfPlanes.data(), 2, 1, 256 ) )
+        {
+            ImGuiExtra::MarkSettingsDirty();
+        }
+
+        if( ImGui::DragInt2( "Plane Offset", mExportBuildData.plane.data(), 2, 1, 256 ) )
+        {
+            ImGuiExtra::MarkSettingsDirty();
+        }
+
+        if( ImGui::Button( "Browse" ) )
+            ImGuiFileDialog::Instance()->OpenDialog( "BrowseFileDlgKey", "Raw", nullptr, mExportBuildData.path );
+
+        if( ImGuiFileDialog::Instance()->Display( "BrowseFileDlgKey", 32, ImVec2 { 600, 400 } ) )
+        {
+            if( ImGuiFileDialog::Instance()->IsOk() )
+            {
+                mExportBuildData.path = ImGuiFileDialog::Instance()->GetFilePathName();
+                ImGuiExtra::MarkSettingsDirty();
+            }
+            ImGuiFileDialog::Instance()->Close();
+        }
+
+        ImGui::SameLine();
+        ImGui::Text( mExportBuildData.path.data() );
+
+        if( ImGui::Button( "Export (async)" ) )
+        {
+            ImGui::CloseCurrentPopup();
+
+            mExportBuildData.name = mName;
+
+            if( mExportThread.joinable() )
+            {
+                mExportThread.join();
+            }
+
+            mExportThread = std::thread( [buildData = mExportBuildData, this]() {
+                auto const startOffset = buildData.offset;
+                auto       buffer      = std::vector<std::uint16_t>( buildData.size.x() * buildData.size.y() );
+
+                std::filesystem::path path = buildData.path.data();
+                std::error_code       ec;
+                std::filesystem::create_directories( path, ec );
+                mExportProgress = 0;
+
+                auto step = 100 / ( buildData.numberOfPlanes.y() * buildData.numberOfPlanes.x() );
+                for( int vy = 0; vy < buildData.numberOfPlanes.y(); ++vy )
+                {
+                    for( int vx = 0; vx < buildData.numberOfPlanes.x(); ++vx )
+                    {
+                        int  x      = vx + buildData.plane.x();
+                        int  y      = vy + buildData.plane.y();
+                        auto copy   = buildData;
+                        copy.offset = Magnum::Vector4( (float)x * buildData.size.x() - buildData.size.x() / 2,
+                                                       (float)y * buildData.size.y() - buildData.size.y() / 2, 0, 0 );
+
+                        copy.plane.x() = x;
+                        copy.plane.y() = y;
+
+                        BuildTerrainDataRAW( buffer, copy, Magnum::Vector4( 0.0f ) );
+
+                        png_structp png_ptr =
+                            png_create_write_struct( PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr );
+                        if( !png_ptr )
+                            return;
+                        png_infop info_ptr = png_create_info_struct( png_ptr );
+                        if( !info_ptr )
+                        {
+                            png_destroy_write_struct( &png_ptr, (png_infopp)NULL );
+                            return;
+                        }
+
+                        if( setjmp( png_jmpbuf( png_ptr ) ) )
+                        {
+                            png_destroy_write_struct( &png_ptr, &info_ptr );
+                            return;
+                        }
+
+
+                        std::string filename = buildData.name;
+                        if( filename.empty() )
+                            filename = "untitled";
+                        filename += "_x";
+                        filename += std::to_string( x );
+                        filename += "_y";
+                        filename += std::to_string( y );
+                        filename += ".png";
+                        filename   = ( path / filename ).string();
+                        FILE* file = fopen( filename.c_str(), "wb" );
+                        png_init_io( png_ptr, file );
+                        png_set_IHDR( png_ptr, info_ptr, (uint32_t)copy.size.x(), (uint32_t)copy.size.y(), 16,
+                                      PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT,
+                                      PNG_FILTER_TYPE_DEFAULT );
+                        png_write_info( png_ptr, info_ptr );
+                        png_set_swap( png_ptr );
+                        auto row_pointers = std::vector<png_bytep>( copy.size.y() );
+                        auto start        = buffer.data();
+                        for( int i = 0; i < copy.size.y(); ++i )
+                        {
+                            row_pointers[i] = (png_bytep)start;
+                            start += copy.size.x();
+                        }
+                        png_write_image( png_ptr, row_pointers.data() );
+                        png_write_end( png_ptr, info_ptr );
+                        png_destroy_write_struct( &png_ptr, &info_ptr );
+                        fclose( file );
+                        mExportProgress.fetch_add( step );
+                    }
+                }
+                mExportProgress = 100;
+            } );
+        }
+        ImGui::SameLine();
+        if( ImGui::Button( "Cancel" ) )
+        {
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::PopItemWidth();
+        ImGui::EndPopup();
+    }
 }
 
 void NoiseTexture::DoExportRAW()
@@ -272,7 +477,7 @@ void NoiseTexture::DoExportRAW()
 
             mExportThread = std::thread( [buildData = mExportBuildData, this]() {
                 auto const startOffset = buildData.offset;
-                auto       buffer      = std::vector<std::int16_t>( buildData.size.x() * buildData.size.y() );
+                auto       buffer      = std::vector<std::uint16_t>( buildData.size.x() * buildData.size.y() );
 
                 std::filesystem::path path = buildData.path.data();
                 std::error_code       ec;
@@ -335,10 +540,6 @@ void NoiseTexture::DoExportBMP()
         {
             ImGui::CloseCurrentPopup();
 
-            float relativeScale = (float)mExportBuildData.size.sum() / mBuildData.size.sum();
-
-            mExportBuildData.frequency /= relativeScale;
-            mExportBuildData.offset *= relativeScale;
             mExportBuildData.name = mName;
 
             if( mExportThread.joinable() )
@@ -506,15 +707,23 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     return TextureData( buildData.iteration, buildData.size, context.minMax, noiseData );
 }
 
-void NoiseTexture::BuildTerrainDataRAW( std::vector<std::int16_t>& buffer, const BuildData& buildData,
+void NoiseTexture::BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, const BuildData& buildData,
                                         Magnum::Vector4 offset )
 {
     auto  data   = BuildTexture<FastNoise::ConvertRAW16>( buildData, offset );
     auto* floats = (float*)data.copy.begin();
     for( std::size_t pix = 0; pix < buffer.size(); ++pix )
-        buffer[pix] = static_cast<std::int16_t>( floats[pix] );
+        buffer[pix] = static_cast<std::uint16_t>( floats[pix] );
 }
 
+void NoiseTexture::BuildTerrainDataRAW( std::vector<std::uint8_t>& buffer, const BuildData& buildData,
+                                        Magnum::Vector4 offset )
+{
+    auto  data   = BuildTexture<FastNoise::ConvertRAW8>( buildData, offset );
+    auto* floats = (float*)data.copy.begin();
+    for( std::size_t pix = 0; pix < buffer.size(); ++pix )
+        buffer[pix] = static_cast<std::uint8_t>( floats[pix] );
+}
 void NoiseTexture::GenerateLoopThread( GenerateQueue<BuildData>&   generateQueue,
                                        CompleteQueue<TextureData>& completeQueue )
 {
@@ -553,7 +762,10 @@ void NoiseTexture::SetupSettingsHandlers()
                          noiseTexture->mExportBuildData.size.y() );
         outBuf->appendf( "pane_size=%d:%d\n", noiseTexture->mExportBuildData.numberOfPlanes.x(),
                          noiseTexture->mExportBuildData.numberOfPlanes.y() );
+        outBuf->appendf( "pane_offset=%d:%d\n", noiseTexture->mExportBuildData.plane.x(),
+                         noiseTexture->mExportBuildData.plane.y() );
         outBuf->appendf( "path=%s\n", noiseTexture->mExportBuildData.path.c_str() );
+        outBuf->appendf( "name=%s\n", noiseTexture->mName.c_str() );
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -573,9 +785,13 @@ void NoiseTexture::SetupSettingsHandlers()
                 &noiseTexture->mExportBuildData.size.y() );
         sscanf( line, "plane_size=%d:%d", &noiseTexture->mExportBuildData.numberOfPlanes.x(),
                 &noiseTexture->mExportBuildData.numberOfPlanes.y() );
+        sscanf( line, "plane_offset=%d:%d", &noiseTexture->mExportBuildData.plane.x(),
+                &noiseTexture->mExportBuildData.plane.y() );
         char name[256] = {};
-        sscanf( line, "path=%s", name );
-        noiseTexture->mExportBuildData.path = name;
+        if( sscanf( line, "path=%s", name ) == 1 )
+            noiseTexture->mExportBuildData.path = name;
+        else if( sscanf( line, "name=%s", name ) == 1 )
+            noiseTexture->mName = name;
     };
 
     ImGuiExtra::AddOrReplaceSettingsHandler( editorSettings );

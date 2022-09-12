@@ -468,6 +468,41 @@ namespace FastNoise
     };
 #endif
 
+
+    class ConvertRAW8 : public virtual Generator
+    {
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+        void SetSource( SmartNodeArg<> gen )
+        {
+            this->SetSourceMemberVariable( mSource, gen );
+        }
+
+
+    protected:
+        GeneratorSource mSource;
+
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<ConvertRAW8> : MetadataT<Generator>
+    {
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+
+        MetadataT()
+        {
+            groups.push_back( "Modifiers" );
+            this->AddGeneratorSource( "Source", &ConvertRAW8::SetSource );
+        }
+    };
+#endif
+
     class Terrace : public virtual Generator
     {
     public:

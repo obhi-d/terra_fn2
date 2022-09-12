@@ -270,7 +270,38 @@ class FS_T<FastNoise::ConvertRAW16, FS> : public virtual FastNoise::ConvertRAW16
         for( std::uint32_t b = 0; b < BlockSize; ++b )
         {
             float32v source = o.output[b];
-            source *= float32v( 32767.0f );
+
+            source = FS_Min_f32( source, float32v( mMax ) );
+            source = FS_Max_f32( source, float32v( mMin ) );
+            source -= float32v( mMin );
+
+            source *= float32v( 65535.0f / ( mMax - mMin ) );
+
+            o.output[b] = source;
+        }
+    }
+};
+
+template<typename FS>
+class FS_T<FastNoise::ConvertRAW8, FS> : public virtual FastNoise::ConvertRAW8, public FS_T<FastNoise::Generator, FS>
+{
+    FASTSIMD_DECLARE_FS_TYPES;
+    FASTNOISE_IMPL_GEN_T;
+
+    template<typename Input>
+    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
+    {
+        this->GetSourceValue( mSource, params, u, i, o );
+        auto BlockSize = i.MaxVectorsInBlock();
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
+        {
+            float32v source = o.output[b];
+
+            source = FS_Min_f32( source, float32v( 1 ) );
+            source = FS_Max_f32( source, float32v( -1 ) );
+            source -= float32v( -1 );
+
+            source *= float32v( 255.f / ( 2 ) );
 
             o.output[b] = source;
         }

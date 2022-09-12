@@ -849,7 +849,7 @@ void FastNoiseNodeEditor::Draw( const Matrix4& transformation, const Matrix4& pr
 
     mNoiseTexture.Draw( this );
 
-    mMeshNoisePreview.Draw( transformation, projection, cameraPosition, mNoiseTexture.GetOffset2D() );
+    mMeshNoisePreview.Draw( transformation, projection, cameraPosition );
 }
 
 void FastNoiseNodeEditor::CheckLinks()
