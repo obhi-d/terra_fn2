@@ -154,6 +154,8 @@ namespace Magnum
         std::vector<std::unique_ptr<MetadataMenu>> mContextMetadata;
         std::string                                mImportNodeString;
 
+        std::string mLastImportImagePath;
+
         bool mImportNodeModal = false;
 
         // MeshNoisePreview mMeshNoisePreview;

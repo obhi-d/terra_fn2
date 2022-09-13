@@ -603,6 +603,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         outBuf->appendf( "frequency=%f\n", nodeEditor->mNodeFrequency );
         outBuf->appendf( "seed=%d\n", nodeEditor->mNodeSeed );
         outBuf->appendf( "gen_type=%d\n", (int)nodeEditor->mNodeGenType );
+        outBuf->appendf( "image_path=%s\n", nodeEditor->mLastImportImagePath.c_str() );
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -624,6 +625,12 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         sscanf( line, "frequency=%f", &nodeEditor->mNodeFrequency );
         sscanf( line, "seed=%d", &nodeEditor->mNodeSeed );
         sscanf( line, "gen_type=%d", (int*)&nodeEditor->mNodeGenType );
+
+        std::string_view l( line );
+        if( l.starts_with( "image_path=" ) )
+        {
+            nodeEditor->mLastImportImagePath = l.substr( sizeof( "image_path" ) );
+        }
     };
 
     ImGuiSettingsHandler histroySettings;
@@ -1074,14 +1081,17 @@ void FastNoiseNodeEditor::DoImages()
 
         if( ImGui::Button( "Add Image" ) )
             ImGuiFileDialog::Instance()->OpenDialog( "ImageFileDlgKey", "Images", ".png,.hdr,.bmp,.tga,.jpeg,.jpg",
-                                                     "." );
+                                                     mLastImportImagePath );
 
 
         if( ImGuiFileDialog::Instance()->Display( "ImageFileDlgKey", 32, ImVec2 { 600, 400 } ) )
         {
             if( ImGuiFileDialog::Instance()->IsOk() )
+            {
+                mLastImportImagePath = ImGuiFileDialog::Instance()->GetCurrentPath();
                 mSelectedImage.index = FastNoise::ImageData::ImageTable.Emplace(
                     Magnum::ImportImage( ImGuiFileDialog::Instance()->GetFilePathName() ) );
+            }
 
             ImGuiFileDialog::Instance()->Close();
         }
