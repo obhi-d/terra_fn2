@@ -26,38 +26,33 @@ class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator
 
 public:
     using uint                                     = std::uint32_t;
-    using Int4                                     = std::array<int, 4>;
-    using Float4                                   = std::array<float, 4>;
+    using DimInt                                   = std::array<int, FastNoise::DimCount>;
+    using DimFloat                                 = std::array<float, FastNoise::DimCount>;
     static constexpr std::uint32_t VectorsPerBlock = 64;
 
 
     struct Uniform
     {
-        Float4         size         = {};
-        Float4         center       = {};
-        Float4         absSize      = {};
-        Float4         recipSize    = {};
-        Float4         recipAbsSize = {};
-        Float4         absOffset    = {};
+        DimFloat       offset     = {};
+        DimFloat       size       = {};
+        DimFloat       center     = {};
+        DimFloat       recipSize  = {};
+        DimInt         startCoord = {};
+        float          freq       = {};
+        int            seed       = 0;
         Context const& ctx;
-        float          freq           = {};
-        bool           singlePlaneInp = false;
 
         Uniform( Uniform const& ) = default;
-        Uniform( Context const& vctx ) :
-            ctx( vctx )
+        Uniform( Context const& vctx ) : ctx( vctx )
         {
         }
 
         void ComputeDerived( uint N )
         {
-            singlePlaneInp = true;
             for( uint i = 0; i < N; ++i )
             {
-                recipSize[i]    = 1.0f / size[i];
-                recipAbsSize[i] = 1.0f / absSize[i];
-                center[i]       = absOffset[i] + ( absSize[i] * 0.5f );
-                singlePlaneInp &= ctx.totalPlanes[i] == 1;
+                recipSize[i] = 1.0f / size[i];
+                center[i]    = offset[i] + ( size[i] * 0.5f );
             }
         }
     };
@@ -80,8 +75,7 @@ public:
         uint     nbValues = 0;
 
         BlockInput() = default;
-        BlockInput( uint v ) :
-            nbValues( v )
+        BlockInput( uint v ) : nbValues( v )
         {
         }
 
@@ -90,15 +84,6 @@ public:
             DimVec uv;
             for( uint i = 0; i < N; ++i )
                 uv[i] = ( v[b][i] - float32v( u.offset[i] ) ) * float32v( u.recipSize[i] );
-            return uv;
-        }
-
-
-        DimVec Ratio( uint b, Uniform const& u ) const
-        {
-            DimVec uv;
-            for( uint i = 0; i < N; ++i )
-                uv[i] = ( float32v( 2.0f ) * FS_Abs_f32( v[b][i] ) ) * float32v( u.recipSize[i] );
             return uv;
         }
 
@@ -166,12 +151,10 @@ public:
         FastNoise::OutputMinMax minMax;
         Output() = default;
 
-        Output( LocalBlock& local ) :
-            output( local.output )
+        Output( LocalBlock& local ) : output( local.output )
         {
         }
-        Output( float32v* local ) :
-            output( local )
+        Output( float32v* local ) : output( local )
         {
         }
 
@@ -231,33 +214,29 @@ public:
     {
     }
 
-#define FASTNOISE_DECL_GEN_T( N ) \
+#define FASTNOISE_DECL_GEN_T( N )                                                                                      \
     virtual void FS_VECTORCALL GenBlock( Params const&, Uniform const&, BlockInput<N>&, Output& ) const = 0
 
     FASTNOISE_DECL_GEN_T( 2 );
-    FASTNOISE_DECL_GEN_T( 3 );
-    FASTNOISE_DECL_GEN_T( 4 );
 
-#define FASTNOISE_IMPL_GEN_T_N( N )                                                                              \
-    void FS_VECTORCALL GenBlock( Params const& p, Uniform const& u, BlockInput<N>& i, Output& o ) const override \
-    {                                                                                                            \
-        GenBlockT( p, u, i, o );                                                                                 \
+#define FASTNOISE_IMPL_GEN_T_N( N )                                                                                    \
+    void FS_VECTORCALL GenBlock( Params const& p, Uniform const& u, BlockInput<N>& i, Output& o ) const override       \
+    {                                                                                                                  \
+        GenBlockT( p, u, i, o );                                                                                       \
     }
 
-#define FASTNOISE_IMPL_GEN_T                                                                           \
-    using Uniform                                  = typename FS_T<FastNoise::Generator, FS>::Uniform; \
-    using Output                                   = typename FS_T<FastNoise::Generator, FS>::Output;  \
-    using Params                                   = typename FS_T<FastNoise::Generator, FS>::Params;  \
-    using uint                                     = typename FS_T<FastNoise::Generator, FS>::uint;    \
-    static constexpr std::uint32_t VectorsPerBlock = FS_T<FastNoise::Generator, FS>::VectorsPerBlock;  \
-    template<unsigned int D>                                                                           \
-    using BlockInput = typename FS_T<FastNoise::Generator, FS>::template BlockInput<D>;                \
-    using FS_T<FastNoise::Generator, FS>::GetSourceValue;                                              \
-    using FS_T<FastNoise::Generator, FS>::GetSourceSIMD;                                               \
-                                                                                                       \
-    FASTNOISE_IMPL_GEN_T_N( 2 )                                                                        \
-    FASTNOISE_IMPL_GEN_T_N( 3 )                                                                        \
-    FASTNOISE_IMPL_GEN_T_N( 4 )
+#define FASTNOISE_IMPL_GEN_T                                                                                           \
+    using Uniform                                  = typename FS_T<FastNoise::Generator, FS>::Uniform;                 \
+    using Output                                   = typename FS_T<FastNoise::Generator, FS>::Output;                  \
+    using Params                                   = typename FS_T<FastNoise::Generator, FS>::Params;                  \
+    using uint                                     = typename FS_T<FastNoise::Generator, FS>::uint;                    \
+    static constexpr std::uint32_t VectorsPerBlock = FS_T<FastNoise::Generator, FS>::VectorsPerBlock;                  \
+    template<unsigned int D>                                                                                           \
+    using BlockInput = typename FS_T<FastNoise::Generator, FS>::template BlockInput<D>;                                \
+    using FS_T<FastNoise::Generator, FS>::GetSourceValue;                                                              \
+    using FS_T<FastNoise::Generator, FS>::GetSourceSIMD;                                                               \
+                                                                                                                       \
+    FASTNOISE_IMPL_GEN_T_N( 2 )
 
 
     FastSIMD::eLevel GetSIMDLevel() const final
@@ -281,7 +260,8 @@ public:
     }
 
     template<typename T, const std::uint32_t N>
-    FS_INLINE void FS_VECTORCALL GetSourceValue( const FastNoise::HybridSourceT<T>& memberVariable, Params const& p, Uniform const& u, BlockInput<N>& i, Output& o ) const
+    FS_INLINE void FS_VECTORCALL GetSourceValue( const FastNoise::HybridSourceT<T>& memberVariable, Params const& p,
+                                                 Uniform const& u, BlockInput<N>& i, Output& o ) const
     {
         if( memberVariable.simdGeneratorPtr )
         {
@@ -293,7 +273,8 @@ public:
     }
 
     template<typename T, const std::uint32_t N>
-    FS_INLINE void FS_VECTORCALL GetSourceValue( const FastNoise::GeneratorSourceT<T>& memberVariable, Params const& p, Uniform const& u, BlockInput<N>& i, Output& o ) const
+    FS_INLINE void FS_VECTORCALL GetSourceValue( const FastNoise::GeneratorSourceT<T>& memberVariable, Params const& p,
+                                                 Uniform const& u, BlockInput<N>& i, Output& o ) const
     {
         assert( memberVariable.simdGeneratorPtr );
         auto simdGen = reinterpret_cast<VoidPtrStorageType>( memberVariable.simdGeneratorPtr );
@@ -311,7 +292,7 @@ public:
     }
 
     template<std::uint32_t DimSize>
-    void GenUniformGrid( Context& context, Int4 start, Int4 size, float frequency, int seed ) const
+    void GenUniformGrid( Context& context, DimInt start, DimInt size, float frequency, int seed ) const
     {
         /// ==============================
         using BlockTy = BlockInput<DimSize>;
@@ -327,6 +308,7 @@ public:
         auto uniform = Uniform( context );
 
         uniform.freq = (float)frequency;
+        uniform.seed = seed;
 
         Params params;
         params.seed = int32v( seed );
@@ -338,9 +320,9 @@ public:
             Size[i] = int32v( size[i] );
             Max[i]  = Size[i] + Idx[i] + int32v( -1 );
 
-            uniform.size[i]      = (float)( size[i] - 1 ) * frequency;
-            uniform.absOffset[i] = (float)context.startOffsetPlane0[i] * frequency;
-            uniform.absSize[i]   = uniform.size[i] * context.totalPlanes[i];
+            uniform.startCoord[i] = size[i];
+            uniform.offset[i]     = (float)( start[i] ) * frequency;
+            uniform.size[i]       = (float)( size[i] - 1 ) * frequency;
         }
 
         uniform.ComputeDerived( DimSize );
@@ -357,8 +339,8 @@ public:
         }
 
         auto constexpr ModulatedVectorsPerBlock = FS_Size_32() * VectorsPerBlock;
-        size_t blockCount                       = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
-        size_t index                            = 0;
+        size_t blockCount = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
+        size_t index      = 0;
 
         auto blocks = std::vector<std::pair<BlockTy, Output>>( blockCount );
         context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
@@ -401,105 +383,10 @@ public:
         Finalize( context );
     }
 
-    void GenTileable2D( Context& context, int xSize, int ySize, float frequency, int seed ) const final
-    {
-        using BlockTy  = BlockInput<2>;
-        auto   uniform = Uniform( context );
-        Params params;
-        params.seed = int32v( seed );
-
-        uniform.ComputeDerived( 2 );
-
-        int32v xIdx( 0 );
-        int32v yIdx( 0 );
-
-        int32v xSizeV( xSize );
-        int32v ySizeV( ySize );
-        int32v xMax = xSizeV + xIdx + int32v( -1 );
-
-        size_t totalValues = xSize * ySize;
-        size_t index       = 0;
-
-        float    pi2Recip( 0.15915493667f );
-        float    xSizePi = (float)xSize * pi2Recip;
-        float    ySizePi = (float)ySize * pi2Recip;
-        float32v xFreq   = float32v( frequency * xSizePi );
-        float32v yFreq   = float32v( frequency * ySizePi );
-        float32v xMul    = float32v( 1 / xSizePi );
-        float32v yMul    = float32v( 1 / ySizePi );
-
-        uniform.freq         = frequency;
-        uniform.absOffset[0] = frequency * xSizePi;
-        uniform.absOffset[1] = frequency * ySizePi;
-        uniform.size[0]      = (float)( xSize - 1 ) * frequency;
-        uniform.size[1]      = (float)( ySize - 1 ) * frequency;
-
-        xIdx += int32v::FS_Incremented();
-        AxisReset<true>( xIdx, yIdx, xMax, xSizeV, xSize );
-
-        auto constexpr ModulatedVectorsPerBlock = FS_Size_32() * VectorsPerBlock;
-        size_t blockCount                       = ( totalValues + ModulatedVectorsPerBlock - 1 ) / ( ModulatedVectorsPerBlock );
-        auto   blocks                           = std::vector<std::pair<BlockTy, Output>>( blockCount );
-
-        context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
-
-        for( size_t b = 0; b < blockCount; ++b )
-        {
-            auto& block    = blocks[b];
-            auto& input    = blocks[b].first;
-            auto& output   = blocks[b].second;
-            output.output  = (float32v*)( context.output.data.get() + b * ModulatedVectorsPerBlock );
-            input.nbValues = 0;
-            uint vertBlock = 0;
-            while( index < totalValues && input.nbValues < ModulatedVectorsPerBlock )
-            {
-                float32v xF = FS_Converti32_f32( xIdx ) * xMul;
-                float32v yF = FS_Converti32_f32( yIdx ) * yMul;
-
-                input.v[vertBlock][0] = FS_Cos_f32( xF ) * xFreq;
-                input.v[vertBlock][1] = FS_Cos_f32( yF ) * yFreq;
-
-                vertBlock++;
-                index += FS_Size_32();
-                input.nbValues += FS_Size_32();
-                xIdx += int32v( FS_Size_32() );
-                AxisReset<false>( xIdx, yIdx, xMax, xSizeV, xSize );
-            }
-        }
-
-        std::for_each( std::execution::par, blocks.begin(), blocks.end(), [&]( auto& block ) {
-            GenBlock( params, uniform, block.first, block.second );
-            block.second.DoMinMax( block.first.nbValues );
-        } );
-
-        for( auto& b: blocks )
-            context.minMax << b.second.minMax;
-        Finalize( context );
-        context.output.resize( alignof( float32v ), totalValues );
-    }
-
-    void GenUniformGrid2D( Context& out,
-                           int xStart, int yStart,
-                           int xSize, int ySize,
-                           float frequency, int seed ) const final
+    void GenUniformGrid2D( Context& out, int xStart, int yStart, int xSize, int ySize, float frequency,
+                           int seed ) const final
     {
         GenUniformGrid<2>( out, { xStart, yStart }, { xSize, ySize }, frequency, seed );
-    }
-
-    void GenUniformGrid3D( Context& out,
-                           int xStart, int yStart, int zStart,
-                           int xSize, int ySize, int zSize,
-                           float frequency, int seed ) const final
-    {
-        GenUniformGrid<3>( out, { xStart, yStart, zStart }, { xSize, ySize, zSize }, frequency, seed );
-    }
-
-    virtual void GenUniformGrid4D( Context& out,
-                                   int xStart, int yStart, int zStart, int wStart,
-                                   int xSize, int ySize, int zSize, int wSize,
-                                   float frequency, int seed ) const final
-    {
-        GenUniformGrid<4>( out, { xStart, yStart, zStart, wStart }, { xSize, ySize, zSize, wSize }, frequency, seed );
     }
 
 private:

@@ -28,14 +28,14 @@ namespace Magnum
     {
         union
         {
-            signed short in[2];
-            uint32_t     out;
+            uint16_t in[2];
+            uint32_t out;
         } u;
 
         Vector2 result( round( clamp( v, -1.0f, 1.0f ) * 32767.0f ) );
 
-        u.in[0] = result[0];
-        u.in[1] = result[1];
+        u.in[0] = (uint16_t)result[0];
+        u.in[1] = (uint16_t)result[1];
 
         return u.out;
     }
@@ -68,4 +68,6 @@ namespace Magnum
         auto value = packSnorm2x16( nor.xy() );
         return *(float*)( &value );
     }
+
+
 } // namespace Magnum

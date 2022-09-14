@@ -145,33 +145,6 @@ class FS_T<FastNoise::Remap, FS> : public virtual FastNoise::Remap, public FS_T<
 };
 
 template<typename FS>
-class FS_T<FastNoise::Normalize, FS> : public virtual FastNoise::Normalize, public FS_T<FastNoise::Generator, FS>
-{
-    FASTSIMD_DECLARE_FS_TYPES;
-    FASTNOISE_IMPL_GEN_T;
-
-
-    template<typename Input>
-    FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
-    {
-        this->GetSourceValue( mSource, params, u, i, o );
-    }
-
-    void Finalize( Context& c ) const override
-    {
-        auto data  = (float32v*)c.output.data.get();
-        auto count = ( c.output.size + FS_Size_32() - 1 ) / FS_Size_32();
-        auto ratio = float32v( 1.0f / ( c.minMax.max - c.minMax.min ) );
-        for( uint i = 0; i < count; ++i )
-        {
-            auto less = data[i] < float32v( c.minMax.min );
-            auto more = data[i] > float32v( c.minMax.max );
-            data[i]   = ( data[i] - float32v( c.minMax.min ) ) * ratio;
-        }
-    }
-};
-
-template<typename FS>
 class FS_T<FastNoise::Octaves, FS> : public virtual FastNoise::Octaves, public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;

@@ -253,39 +253,6 @@ namespace FastNoise
     };
 #endif
 
-    class Normalize : public virtual Generator
-    {
-    public:
-        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
-        const Metadata& GetMetadata() const override;
-
-        void SetSource( SmartNodeArg<> gen )
-        {
-            this->SetSourceMemberVariable( mSource, gen );
-        }
-
-    protected:
-        GeneratorSource mSource;
-
-        template<typename T>
-        friend struct MetadataT;
-    };
-
-#ifdef FASTNOISE_METADATA
-    template<>
-    struct MetadataT<Normalize> : MetadataT<Generator>
-    {
-        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
-
-        MetadataT()
-        {
-            groups.push_back( "Modifiers" );
-            this->AddGeneratorSource( "Source", &Normalize::SetSource );
-        }
-    };
-#endif
-
-
     class Octaves : public virtual Generator
     {
     public:

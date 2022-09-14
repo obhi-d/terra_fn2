@@ -16,8 +16,8 @@
 
 #include "EditableHieghtmap.h"
 #include "FastNoise/ImageData.h"
-#include "MeshNoisePreview.h"
 #include "NoiseTexture.h"
+#include "ToolWindow.h"
 
 namespace Magnum
 {
@@ -26,8 +26,11 @@ namespace Magnum
     public:
         FastNoiseNodeEditor();
         void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition );
+        void DrawEditor( ToolWindow& window );
+        void DrawTexture();
         void SetSIMDLevel( FastSIMD::eLevel lvl );
         void AddHistoryRecord();
+        void UpdateSelected();
 
         static const char* GetSIMDLevelName( FastSIMD::eLevel lvl );
 
@@ -42,6 +45,11 @@ namespace Magnum
             Node( FastNoiseNodeEditor& editor, FastNoise::NodeData* nodeData, bool generatePreview = true, int id = 0 );
             Node( FastNoiseNodeEditor& editor, std::unique_ptr<FastNoise::NodeData>&& nodeData,
                   bool generatePreview = true, int id = 0 );
+
+            ~Node()
+            {
+            }
+
             void                              GeneratePreview( bool nodeTreeChanged = true, bool benchmark = false );
             std::vector<FastNoise::NodeData*> GetNodeIDLinks();
             uint64_t                          GetLocalGenerateNs();
@@ -143,7 +151,6 @@ namespace Magnum
         void DoNodes();
         void DoHistory();
         void DoImages();
-        void UpdateSelected();
 
 
         std::unordered_map<FastNoise::NodeData*, Node> mNodes;
@@ -158,7 +165,6 @@ namespace Magnum
 
         bool mImportNodeModal = false;
 
-        // MeshNoisePreview mMeshNoisePreview;
         EditableHeightmap mMeshNoisePreview;
         NoiseTexture      mNoiseTexture;
 

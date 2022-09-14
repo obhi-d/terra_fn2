@@ -206,7 +206,7 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
 
             Vector4 oldOffset = mBuildData.offset;
 
-            if( mBuildData.generationType != GenType_2DTiled && ImGui::IsMouseDragging( ImGuiMouseButton_Left ) )
+            if( ImGui::IsMouseDragging( ImGuiMouseButton_Left ) )
             {
                 Vector2 dragDelta( ImGui::GetMouseDragDelta( ImGuiMouseButton_Left ) );
                 ImGui::ResetMouseDragDelta( ImGuiMouseButton_Left );
@@ -214,25 +214,11 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
                 mBuildData.offset.x() -= dragDelta.x();
                 mBuildData.offset.y() -= dragDelta.y();
             }
-            else if( ( mBuildData.generationType == GenType_3D || mBuildData.generationType == GenType_4D ) &&
-                     ImGui::IsMouseDragging( ImGuiMouseButton_Right ) )
-            {
-                Vector2 dragDelta( ImGui::GetMouseDragDelta( ImGuiMouseButton_Right ) );
-                ImGui::ResetMouseDragDelta( ImGuiMouseButton_Right );
-
-                mBuildData.offset.z() -= dragDelta.x();
-
-                if( mBuildData.generationType == GenType_4D )
-                {
-                    mBuildData.offset.w() -= dragDelta.y();
-                }
-            }
 
             if( oldOffset != mBuildData.offset )
             {
                 ReGenerate( mBuildData.generator );
             }
-
 
             auto mouse = ImGui::GetMousePos();
             auto delta = mouse - ImagePos;
@@ -673,11 +659,9 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
     auto gen = FastNoise::New<Wrapper>( buildData.generator->GetSIMDLevel() );
     gen->SetSource( buildData.generator );
 
-    auto context = FastNoise::Generator::Context( noiseData, { (int)buildData.offset.x(), (int)buildData.offset.y() } );
-    context.planeId[0]     = buildData.plane.x();
-    context.planeId[1]     = buildData.plane.y();
-    context.totalPlanes[0] = buildData.numberOfPlanes.x();
-    context.totalPlanes[1] = buildData.numberOfPlanes.y();
+    auto context       = FastNoise::Generator::Context( noiseData );
+    context.planeId[0] = buildData.plane.x();
+    context.planeId[1] = buildData.plane.y();
     offset += buildData.offset;
     switch( buildData.generationType )
     {
@@ -685,20 +669,6 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( const BuildData& buildData
 
         gen->GenUniformGrid2D( context, (int)offset.x(), (int)offset.y(), buildData.size.x(), buildData.size.y(),
                                buildData.frequency, buildData.seed );
-        break;
-
-    case GenType_2DTiled:
-        gen->GenTileable2D( context, buildData.size.x(), buildData.size.y(), buildData.frequency, buildData.seed );
-        break;
-
-    case GenType_3D:
-        gen->GenUniformGrid3D( context, (int)offset.x(), (int)offset.y(), (int)offset.z(), buildData.size.x(),
-                               buildData.size.y(), 1, buildData.frequency, buildData.seed );
-        break;
-
-    case GenType_4D:
-        gen->GenUniformGrid4D( context, (int)offset.x(), (int)offset.y(), (int)offset.z(), (int)offset.w(),
-                               buildData.size.x(), buildData.size.y(), 1, 1, buildData.frequency, buildData.seed );
         break;
     case GenType_Count:
         break;

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 #include <Corrade/Utility/Resource.h>
 #include <Magnum/GL/DefaultFramebuffer.h>
@@ -14,6 +15,7 @@
 
 #include "FastNoise/ImageData.h"
 #include "ImageImporter.h"
+#include "SDL.h"
 
 using namespace Magnum;
 
@@ -28,35 +30,22 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
                             Configuration {}
                                 .setTitle( "FastNoise2 NoiseTool" )
                                 .setSize( Vector2i( 1280, 720 ) )
-                                .setWindowFlags( Configuration::WindowFlag::Resizable | Configuration::WindowFlag::Maximized ),
-                            GLConfiguration {}
-                                .setSampleCount( 4 ) },
-    mImGuiIntegrationContext { NoCreate },
-    mImGuiContext { ImGui::CreateContext() }
+                                .setWindowFlags( Configuration::WindowFlag::Resizable |
+                                                 Configuration::WindowFlag::Maximized ),
+                            GLConfiguration {}.setSampleCount( 4 ) },
+    mImGuiContextMain { ImGui::CreateContext() }
 {
+    addFont( windowSize(), framebufferSize(), dpiScaling() );
+
     InitResources();
 
     const Vector2 size = Vector2 { windowSize() } / dpiScaling();
 
-    // Add a font that actually looks acceptable on HiDPI screens.
-    {
-        ImFontConfig fontConfig;
-        fontConfig.FontDataOwnedByAtlas    = false;
-        const auto           font          = Utility::Resource { "NoiseTool" }.getRaw( "Font.ttf" );
-        const auto           iconFont      = Utility::Resource { "NoiseTool" }.getRaw( "fontawesome.otf" );
-        static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
-        ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( font.data() ), (int)font.size(), 14.0f * framebufferSize().x() / size.x(), &fontConfig );
-        ImFontConfig config;
-        config.FontDataOwnedByAtlas = false;
-        config.MergeMode            = true;
-        config.GlyphMinAdvanceX     = 13.0f;
-        ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( iconFont.data() ), (int)iconFont.size(), 14.0f * framebufferSize().x() / size.x(), &config, icon_ranges );
-    }
-
     auto& io                 = ImGui::GetIO();
     io.IniFilename           = "NoiseTool.ini";
-    mImGuiIntegrationContext = ImGuiIntegration::Context( *mImGuiContext, size, windowSize(), framebufferSize() );
+    mImGuiIntegrationContext = ImGuiIntegration::Context( *mImGuiContextMain, size, windowSize(), framebufferSize() );
     std::memset( io.KeyMap, -1, sizeof( io.KeyMap ) );
+
 
     GL::Renderer::enable( GL::Renderer::Feature::DepthTest );
 
@@ -71,9 +60,11 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
        you'll need this exact behavior for the rest of your scene. If not, set
        this only for the drawFrame() call. */
     GL::Renderer::setBlendEquation( GL::Renderer::BlendEquation::Add, GL::Renderer::BlendEquation::Add );
-    GL::Renderer::setBlendFunction( GL::Renderer::BlendFunction::SourceAlpha, GL::Renderer::BlendFunction::OneMinusSourceAlpha );
+    GL::Renderer::setBlendFunction( GL::Renderer::BlendFunction::SourceAlpha,
+                                    GL::Renderer::BlendFunction::OneMinusSourceAlpha );
 
-    Debug {} << "FastSIMD detected max CPU SIMD Level:" << FastNoiseNodeEditor::GetSIMDLevelName( FastSIMD::CPUMaxSIMDLevel() );
+    Debug {} << "FastSIMD detected max CPU SIMD Level:"
+             << FastNoiseNodeEditor::GetSIMDLevelName( FastSIMD::CPUMaxSIMDLevel() );
 
     mLevelNames = { "Auto" };
     mLevelEnums = { FastSIMD::Level_Null };
@@ -87,51 +78,54 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
             mLevelEnums.emplace_back( lvl );
         }
     }
+
+    mWindowID = SDL_GetWindowID( window() );
+    createEditorWindows();
 }
 
 NoiseToolApp::~NoiseToolApp()
 {
-    // Avoid trying to save settings after node editor is already destroyed
-    ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
-    ImGui::GetIO().IniFilename = nullptr;
+    quit();
+}
+
+void Magnum::NoiseToolApp::addFont( Vector2i windowSize, Vector2i framebufferSize, Vector2 dpiScaling )
+{
+
+    // Add a font that actually looks acceptable on HiDPI screens.
+    const Vector2 size = Vector2 { windowSize } / dpiScaling;
+
+    ImFontConfig fontConfig;
+    fontConfig.FontDataOwnedByAtlas    = false;
+    const auto           font          = Utility::Resource { "NoiseTool" }.getRaw( "Font.ttf" );
+    const auto           iconFont      = Utility::Resource { "NoiseTool" }.getRaw( "fontawesome.otf" );
+    static const ImWchar icon_ranges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+
+    ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( font.data() ), (int)font.size(),
+                                                14.0f * framebufferSize.x() / size.x(), &fontConfig );
+    ImFontConfig config;
+    config.FontDataOwnedByAtlas = false;
+    config.MergeMode            = true;
+    config.GlyphMinAdvanceX     = 13.0f;
+    ImGui::GetIO().Fonts->AddFontFromMemoryTTF( const_cast<char*>( iconFont.data() ), (int)iconFont.size(),
+                                                14.0f * framebufferSize.x() / size.x(), &config, icon_ranges );
+}
+
+
+void Magnum::NoiseToolApp::createEditorWindows()
+{
+    mNodes.create( *this, "Node Editor", Vector2i( 1280, 720 ), dpiScaling() );
 }
 
 void NoiseToolApp::drawEvent()
 {
+    if( mSkipDraw )
+        return;
+    SDL_GL_MakeCurrent( window(), glContext() );
+    GL::defaultFramebuffer.setViewport( { {}, framebufferSize() } );
+
     GL::defaultFramebuffer.clear( GL::FramebufferClear::Color | GL::FramebufferClear::Depth );
 
     mImGuiIntegrationContext.newFrame();
-
-    /* Enable text input, if needed */
-    if( ImGui::GetIO().WantTextInput && !isTextInputActive() )
-        startTextInput();
-    else if( !ImGui::GetIO().WantTextInput && isTextInputActive() )
-        stopTextInput();
-
-    {
-        if( ImGui::Button( "Reset State" ) )
-        {
-            ImGui::ClearIniSettings();
-            mNodeEditor.~FastNoiseNodeEditor();
-            new( &mNodeEditor ) FastNoiseNodeEditor();
-            ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
-        }
-
-        if( ImGui::ColorEdit3( "Clear Color", mClearColor.data() ) )
-            GL::Renderer::setClearColor( mClearColor );
-
-        ImGui::Checkbox( "Backface Culling", &mBackFaceCulling );
-
-        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)",
-                     1000.0 / Double( ImGui::GetIO().Framerate ), Double( ImGui::GetIO().Framerate ) );
-
-        if( ImGui::Combo( "Max SIMD Level", &mMaxSIMDLevel, mLevelNames.data(), (int)mLevelEnums.size() ) ||
-            ImGuiExtra::ScrollCombo( &mMaxSIMDLevel, (int)mLevelEnums.size() ) )
-        {
-            FastSIMD::eLevel newLevel = mLevelEnums[mMaxSIMDLevel];
-            mNodeEditor.SetSIMDLevel( newLevel );
-        }
-    }
 
     // Update camera pos
     Vector3 cameraVelocity( 0 );
@@ -178,8 +172,47 @@ void NoiseToolApp::drawEvent()
         GL::Renderer::enable( GL::Renderer::Feature::FaceCulling );
     }
 
-    mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(), mCameraObject.transformation().translation() );
-    
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::DockSpaceOverViewport( viewport, ImGuiDockNodeFlags_PassthruCentralNode );
+
+    if( ImGui::Begin( "Parameters" ) )
+    {
+        if( ImGui::Button( "Reset State" ) )
+        {
+            ImGui::ClearIniSettings();
+            mNodeEditor.~FastNoiseNodeEditor();
+            new( &mNodeEditor ) FastNoiseNodeEditor();
+            ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
+        }
+
+        if( ImGui::Button( ICON_FA_TOOLBOX ) )
+        {
+            mNodes.show();
+        }
+
+        if( ImGui::ColorEdit3( "Clear Color", mClearColor.data() ) )
+            GL::Renderer::setClearColor( mClearColor );
+
+        ImGui::Checkbox( "Backface Culling", &mBackFaceCulling );
+
+        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
+                     Double( ImGui::GetIO().Framerate ) );
+
+        if( ImGui::Combo( "Max SIMD Level", &mMaxSIMDLevel, mLevelNames.data(), (int)mLevelEnums.size() ) ||
+            ImGuiExtra::ScrollCombo( &mMaxSIMDLevel, (int)mLevelEnums.size() ) )
+        {
+            FastSIMD::eLevel newLevel = mLevelEnums[mMaxSIMDLevel];
+            mNodeEditor.SetSIMDLevel( newLevel );
+        }
+    }
+
+    mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(),
+                      mCameraObject.transformation().translation() );
+
+    ImGui::End();
+
+    mNodeEditor.DrawTexture();
+
     /* Set appropriate states. If you only draw ImGui, it is sufficient to
        just enable blending and scissor test in the constructor. */
     GL::Renderer::enable( GL::Renderer::Feature::Blending );
@@ -190,14 +223,30 @@ void NoiseToolApp::drawEvent()
     mImGuiIntegrationContext.updateApplicationCursor( *this );
     mImGuiIntegrationContext.drawFrame();
 
+    swapBuffers();
+
+    mNodes.beginDraw( *this );
+
+    /* Enable text input, if needed */
+    if( ImGui::GetIO().WantTextInput && !isTextInputActive() )
+        startTextInput();
+    else if( !ImGui::GetIO().WantTextInput && isTextInputActive() )
+        stopTextInput();
+
+    mNodeEditor.DrawEditor( mNodes );
+
+    mNodes.endDraw( *this );
+
+    redraw();
+
+    mNodeEditor.UpdateSelected();
+
     /* Reset state. Only needed if you want to draw something else with
        different state after. */
     GL::Renderer::enable( GL::Renderer::Feature::DepthTest );
     GL::Renderer::disable( GL::Renderer::Feature::ScissorTest );
     GL::Renderer::disable( GL::Renderer::Feature::Blending );
 
-    swapBuffers();
-    redraw();
     mFrameTime.nextFrame();
 }
 
@@ -299,27 +348,40 @@ bool NoiseToolApp::handleKeyEvent( KeyEvent::Key key, bool value )
 
 void NoiseToolApp::viewportEvent( ViewportEvent& event )
 {
-    GL::defaultFramebuffer.setViewport( { {}, event.framebufferSize() } );
-
-    UpdatePespectiveProjection();
-
-    mImGuiIntegrationContext.relayout( Vector2 { event.windowSize() } / event.dpiScaling(), event.windowSize(), event.framebufferSize() );
+    if( event.event().window.windowID == mNodes.id() )
+        mNodes.viewportEvent( event );
+    else
+    {
+        UpdatePespectiveProjection();
+        mImGuiIntegrationContext.relayout( Vector2 { event.windowSize() } / event.dpiScaling(), event.windowSize(),
+                                           event.framebufferSize() );
+    }
 }
 
 void NoiseToolApp::keyPressEvent( KeyEvent& event )
 {
-    if( handleKeyEvent( event.key(), true ) )
-        return;
+    if( event.event().key.windowID == mNodes.id() )
+        mNodes.keyPressEvent( event );
+    else
+    {
+        if( handleKeyEvent( event.key(), true ) )
+            return;
 
-    HandleKeyEvent( event.key(), true );
+        HandleKeyEvent( event.key(), true );
+    }
 }
 
 void NoiseToolApp::keyReleaseEvent( KeyEvent& event )
 {
-    if( handleKeyEvent( event.key(), false ) )
-        return;
+    if( event.event().key.windowID == mNodes.id() )
+        mNodes.keyReleaseEvent( event );
+    else
+    {
+        if( handleKeyEvent( event.key(), false ) )
+            return;
 
-    HandleKeyEvent( event.key(), false );
+        HandleKeyEvent( event.key(), false );
+    }
 }
 
 void NoiseToolApp::HandleKeyEvent( KeyEvent::Key key, bool value )
@@ -385,37 +447,74 @@ void NoiseToolApp::HandleKeyEvent( KeyEvent::Key key, bool value )
 
 void NoiseToolApp::mousePressEvent( MouseEvent& event )
 {
-    if( mImGuiIntegrationContext.handleMousePressEvent( event ) )
-        return;
-    if( event.button() != MouseEvent::Button::Left )
-        return;
+    if( event.event().button.windowID == mNodes.id() )
+        mNodes.mousePressEvent( event );
+    else
+    {
+        if( mImGuiIntegrationContext.handleMousePressEvent( event ) )
+            return;
+        if( event.button() != MouseEvent::Button::Left )
+            return;
 
-    event.setAccepted();
+        event.setAccepted();
+    }
 }
 
 void NoiseToolApp::mouseReleaseEvent( MouseEvent& event )
 {
-    if( mImGuiIntegrationContext.handleMouseReleaseEvent( event ) )
-        return;
+    if( event.event().button.windowID == mNodes.id() )
+        mNodes.mouseReleaseEvent( event );
+    else
+    {
 
-    event.setAccepted();
+        if( mImGuiIntegrationContext.handleMouseReleaseEvent( event ) )
+            return;
+
+        event.setAccepted();
+    }
 }
 
 void NoiseToolApp::mouseScrollEvent( MouseScrollEvent& event )
 {
-    if( mImGuiIntegrationContext.handleMouseScrollEvent( event ) )
+    if( event.event().wheel.windowID == mNodes.id() )
+        mNodes.mouseScrollEvent( event );
+    else
     {
-        /* Prevent scrolling the page */
-        event.setAccepted();
-        return;
+
+        if( mImGuiIntegrationContext.handleMouseScrollEvent( event ) )
+        {
+            /* Prevent scrolling the page */
+            event.setAccepted();
+            return;
+        }
     }
 }
 
 void NoiseToolApp::mouseMoveEvent( MouseMoveEvent& event )
 {
-    if( mImGuiIntegrationContext.handleMouseMoveEvent( event ) )
+
+    if( event.event().motion.windowID == mNodes.id() )
+    {
+        mNodes.mouseMoveEvent( event );
         return;
-    if( !( event.buttons() & MouseMoveEvent::Button::Left ) )
+    }
+
+    mImGuiIntegrationContext.handleMouseMoveEvent( event );
+
+    int    x, y;
+    Uint32 button = SDL_GetGlobalMouseState( &x, &y );
+
+    ImGuiIO& io = ImGui::GetIO();
+    if( ( ( (MouseMoveEvent::Button)button ) & MouseMoveEvent::Button::Left ) )
+        io.AddMouseButtonEvent( 0, true );
+    else
+        io.AddMouseButtonEvent( 0, false );
+
+
+    if( io.WantCaptureMouse )
+        return;
+
+    if( !( ( (MouseMoveEvent::Button)button ) & MouseMoveEvent::Button::Left ) )
         return;
 
     constexpr float mouseSensitivity = 0.22f;
@@ -427,9 +526,11 @@ void NoiseToolApp::mouseMoveEvent( MouseMoveEvent& event )
         mLookAngle.y() = std::clamp( mLookAngle.y() - angleDelta.y(), -89.f, 89.f );
 
         const Vector3 translation = mCameraObject.transformation().translation();
-        const Matrix4 rotation    = Matrix4::rotationY( Deg { mLookAngle.x() } ) * Matrix4::rotationX( Deg { mLookAngle.y() } );
+        const Matrix4 rotation =
+            Matrix4::rotationY( Deg { mLookAngle.x() } ) * Matrix4::rotationX( Deg { mLookAngle.y() } );
 
-        mCameraObject.setTransformation( Matrix4::lookAt( translation, translation - rotation.rotationNormalized() * Vector3::zAxis(), Vector3::yAxis() ) );
+        mCameraObject.setTransformation( Matrix4::lookAt(
+            translation, translation - rotation.rotationNormalized() * Vector3::zAxis(), Vector3::yAxis() ) );
     }
 
     event.setAccepted();
@@ -437,14 +538,47 @@ void NoiseToolApp::mouseMoveEvent( MouseMoveEvent& event )
 
 void NoiseToolApp::textInputEvent( TextInputEvent& event )
 {
+    if( event.event().text.windowID == mNodes.id() )
+    {
+        mNodes.textInputEvent( event );
+        return;
+    }
+
     if( mImGuiIntegrationContext.handleTextInputEvent( event ) )
         return;
 }
 
 void NoiseToolApp::UpdatePespectiveProjection()
 {
-    mCamera.setProjectionMatrix( Matrix4::perspectiveProjection( Deg( 70.0f ), Vector2 { windowSize() }.aspectRatio(), 2.0f, 3500.0f ) );
+    mCamera.setProjectionMatrix(
+        Matrix4::perspectiveProjection( Deg( 70.0f ), Vector2 { windowSize() }.aspectRatio(), 2.0f, 3500.0f ) );
 }
 
+void NoiseToolApp::anyEvent( SDL_Event& event )
+{
+    if( event.type == SDL_WINDOWEVENT )
+    {
+        if( event.window.event == SDL_WINDOWEVENT_CLOSE )
+        {
+            if( event.window.windowID == mNodes.id() )
+                mNodes.hide();
+            else
+            {
+                quit();
+                exit( 0 );
+            }
+        }
+    }
+}
+
+void NoiseToolApp::quit()
+{
+    mSkipDraw = true;
+    ImGui::SetCurrentContext( mImGuiContextMain );
+    // Avoid trying to save settings after node editor is already destroyed
+    ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
+    ImGui::GetIO().IniFilename = nullptr;
+    mNodes.destroy();
+}
 
 MAGNUM_APPLICATION_MAIN( NoiseToolApp )

@@ -25,17 +25,12 @@ namespace FastNoise
     {
         X,
         Y,
-        Z,
-        W,
         Count
     };
 
-    constexpr static const char* kDim_Strings[] = {
-        "X",
-        "Y",
-        "Z",
-        "W",
-    };
+    constexpr static std::uint32_t DimCount = (std::uint32_t)Dim::Count;
+
+    constexpr static const char* kDim_Strings[] = { "X", "Y" };
 
     enum class DistanceFunction
     {
@@ -197,10 +192,8 @@ namespace FastNoise
         struct Context
         {
             // External API
-            std::array<int, 4> planeId           = { 0, 0, 0, 0 };
-            std::array<int, 4> totalPlanes       = { 1, 1, 1, 1 };
-            std::array<int, 4> startOffsetPlane0 = { 0, 0, 0, 0 };
-            Context( Buffer& out, std::array<int, 4> start ) : output( out ), startOffsetPlane0( start )
+            std::array<int, DimCount> planeId = { 0 };
+            Context( Buffer& out ) : output( out )
             {
             }
             // Output
@@ -218,14 +211,6 @@ namespace FastNoise
 
         virtual void GenUniformGrid2D( Context& out, int xStart, int yStart, int xSize, int ySize, float frequency,
                                        int seed ) const = 0;
-
-        virtual void GenUniformGrid3D( Context& out, int xStart, int yStart, int zStart, int xSize, int ySize,
-                                       int zSize, float frequency, int seed ) const = 0;
-
-        virtual void GenUniformGrid4D( Context& out, int xStart, int yStart, int zStart, int wStart, int xSize,
-                                       int ySize, int zSize, int wSize, float frequency, int seed ) const = 0;
-
-        virtual void GenTileable2D( Context& out, int xSize, int ySize, float frequency, int seed ) const = 0;
 
         // called when all member variables have been set
         virtual void ApplyChanges() = 0;

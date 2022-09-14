@@ -63,18 +63,20 @@ namespace FastNoise
 
         bool EndEdits( bool apply )
         {
-            apply |= edits.liveUpdate;
             if( edits.dirty )
             {
                 edits.spline = tk::spline<>::spline( edits.cx, edits.cy, edits.type, edits.monotonic, edits.left,
                                                      edits.leftValue, edits.right, edits.rightValue );
             }
-            if( apply && edits.edited && edits.dirty )
+            if( ( edits.liveUpdate || apply ) && edits.edited && edits.dirty )
             {
-                spline        = edits.spline;
-                edits.edited  = false;
-                edits.dirty   = false;
-                edits.dragged = -1;
+                spline = edits.spline;
+                if( apply )
+                {
+                    edits.edited  = false;
+                    edits.dirty   = false;
+                    edits.dragged = -1;
+                }
                 return true;
             }
             return false;

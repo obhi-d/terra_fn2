@@ -1,7 +1,6 @@
 #include "EditableHieghtmap.h"
 #include "IconsFontAwesome6.h"
 #include "ImGuiExtra.h"
-#include "MeshNoisePreview.h"
 #include "Utils.h"
 
 namespace Magnum
@@ -74,7 +73,7 @@ namespace Magnum
 
         auto size = (size_t)( heightmapSize.y() + 1 ) * (size_t)( heightmapSize.x() + 1 );
 
-        FastNoise::Generator::Context ctx( heights, { 0, 0, 0, 0 } );
+        FastNoise::Generator::Context ctx( heights );
 
         generator->GenUniformGrid2D( ctx, startX, startY, sx, sy, frequency, seed );
         heightBuffer.setData( Containers::ArrayView<float>( heights.begin(), size ), GL::BufferUsage::DynamicDraw );
@@ -100,6 +99,15 @@ namespace Magnum
         edited |= ImGui::DragInt( "Seed", &seed );
         edited |= ImGui::DragFloat( "Frequency", &frequency, 0.0005f, 0, 0, "%.4f" );
         edited |= ImGui::DragInt2( "Offset", offset.data() );
+        ImGui::SameLine();
+        if( ImGui::Button( ICON_FA_BULLSEYE ) )
+        {
+            auto oldOffset = offset;
+            offset.x()     = -heightmapSize.x() / 2;
+            offset.y()     = -heightmapSize.y() / 2;
+            if( offset != heightmapSize )
+                edited = true;
+        }
         edited |= ImGui::DragInt2( "Size", heightmapSize.data() );
 
         if( ImGui::DragFloat( "Heightmap Multiplier", &heightMultiplier, 0.5f ) || firstDraw )

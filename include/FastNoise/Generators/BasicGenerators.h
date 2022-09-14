@@ -241,11 +241,11 @@ namespace FastNoise
         float mMinScale = 0.0f;
         float mMaxScale = 1.0f;
 
-        ImageData const*               mImage    = nullptr;
-        PerDimensionVariable<bool, 2>  mMirror   = false;
-        PerDimensionVariable<float, 2> mOffset   = {};
-        PerDimensionVariable<float, 2> mScale    = {};
-        Sampling                       mSampling = Sampling::e1x;
+        ImageData const*                      mImage    = nullptr;
+        PerDimensionVariable<bool, 2>         mMirror   = false;
+        PerDimensionVariable<HybridSource, 2> mOffset   = {};
+        PerDimensionVariable<HybridSource, 2> mScale    = {};
+        Sampling                              mSampling = Sampling::e1x;
 
         template<typename T>
         friend struct MetadataT;
@@ -264,9 +264,8 @@ namespace FastNoise
             this->AddVariable( "Min", -1.0f, &StrataMask::SetMinScale );
             this->AddVariable( "Max", 1.0f, &StrataMask::SetMaxScale );
             this->AddPerDimensionVariable( "Mirror", true, []( StrataMask* p ) { return std::ref( p->mMirror ); } );
-            this->AddPerDimensionVariable(
-                "Offset", 0.0f, []( StrataMask* p ) { return std::ref( p->mOffset ); }, 0.0f, 1.0f );
-            this->AddPerDimensionVariable( "Scale", 1.0f, []( StrataMask* p ) { return std::ref( p->mScale ); } );
+            this->AddPerDimensionHybridSource( "Offset", 0.0f, []( StrataMask* p ) { return std::ref( p->mOffset ); } );
+            this->AddPerDimensionHybridSource( "Scale", 1.0f, []( StrataMask* p ) { return std::ref( p->mScale ); } );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
@@ -307,6 +306,58 @@ namespace FastNoise
             this->AddVariableCurve( "Curve", &CurveGen::SetCurve );
             this->AddPerDimensionVariable( "Apply", true, []( CurveGen* p ) { return std::ref( p->mApply ); } );
             this->AddPerDimensionVariable( "Strength", 1.0f, []( CurveGen* p ) { return std::ref( p->mStrength ); } );
+        }
+
+        SmartNode<> CreateNode( FastSIMD::eLevel ) const override;
+    };
+
+#endif
+
+
+    class RandomConstant : public virtual Generator
+    {
+
+    public:
+        FASTSIMD_LEVEL_SUPPORT( FastNoise::SUPPORTED_SIMD_LEVELS );
+        const Metadata& GetMetadata() const override;
+
+
+        void SetMax( float value )
+        {
+            mMax = value;
+        }
+
+        void SetMin( float value )
+        {
+            mMin = value;
+        }
+
+        void SetSeedOffset( int offset )
+        {
+            mSeedOffset = offset;
+        }
+
+    protected:
+        int   mSeedOffset = 0;
+        float mMax        = 1.0f;
+        float mMin        = -1.0f;
+
+
+        template<typename T>
+        friend struct MetadataT;
+    };
+
+
+#ifdef FASTNOISE_METADATA
+    template<>
+    struct MetadataT<RandomConstant> : MetadataT<Generator>
+    {
+        MetadataT()
+        {
+            groups.push_back( "Basic Generators" );
+            this->AddVariable( "SeedOffset", 0, &RandomConstant::SetSeedOffset );
+            this->AddVariable( "Min", -1.0f, &RandomConstant::SetMin );
+            this->AddVariable( "Max", 1.0f, &RandomConstant::SetMax );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;

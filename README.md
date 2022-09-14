@@ -19,4 +19,9 @@ It compiles with C++20 (only tested on Windows).
 - Export multiple planes of terrain
 
 
+# Planned Features
+- [x] Node editor on a different window
+- [x] Random scale/rotate generator (per plane)
+- [ ] Node grouping into meta groups
+- [ ] Add camera re-focus button
 ![NoiseTool](example/snapshot.png)

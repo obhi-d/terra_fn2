@@ -59,7 +59,10 @@ namespace Magnum
                 image.format = FastNoise::ImageData::Format::EUInt;
                 break;
             case PixelFormat::R16Snorm:
+            case PixelFormat::R16Unorm:
+
             case PixelFormat::R16I:
+            case PixelFormat::R16UI:
                 image.format = FastNoise::ImageData::Format::EUInt16;
                 break;
             default:

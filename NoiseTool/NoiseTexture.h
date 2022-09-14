@@ -25,9 +25,6 @@ namespace Magnum
         enum GenType
         {
             GenType_2D,
-            GenType_2DTiled,
-            GenType_3D,
-            GenType_4D,
             GenType_Count
         };
 

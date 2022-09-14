@@ -1,7 +1,8 @@
+
 CPMAddPackage(
     NAME corrade
     GITHUB_REPOSITORY mosra/corrade
-    GIT_TAG 61d1b58cbcb159837bca506b5336a810da67f0a7
+    GIT_TAG e6b4d952e757ab99a0b67e516235b7f91904dca0
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
@@ -10,29 +11,38 @@ CPMAddPackage(
         "WITH_TESTSUITE OFF"
 )
 
+
 CPMAddPackage(
-    NAME GLFW
-    GITHUB_REPOSITORY glfw/glfw
-    GIT_TAG 3.3.7
+    NAME SDL2
+    GITHUB_REPOSITORY libsdl-org/SDL
+    GIT_TAG release-2.24.0
     EXCLUDE_FROM_ALL YES
     OPTIONS
-        "BUILD_SHARED_LIBS OFF"
-        "GLFW_INSTALL OFF"
-        "GLFW_BUILD_TESTS OFF"
-        "GLFW_BUILD_EXAMPLES OFF"
-        "GLFW_BUILD_DOCS OFF"
+      "SDL_ATOMIC OFF"
+      "SDL_CPUINFO OFF"
+      "SDL_FILE OFF"
+      "SDL_FILESYSTEM OFF"
+      "SDL_HAPTIC OFF"
+      "SDL_LOCALE OFF"
+      "SDL_POWER OFF"
+      "SDL_RENDER OFF"
+      "SDL_SENSOR OFF"
+      "SDL_THREADS ON"
+      "SDL_STATIC ON"
+      "SDL_SHARED OFF"
 )
 
 CPMAddPackage(
     NAME magnum
     GITHUB_REPOSITORY mosra/magnum
-    GIT_TAG fac6f4da261930c7035bf51f66091e350905720b
+    GIT_TAG fa00122fdb84eab23064d83c36d50757fdf899c1
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
         "BUILD_STATIC ON"
         "BUILD_PLUGINS_STATIC ON"
-        "WITH_GLFWAPPLICATION ON"
+        "WITH_SDL2APPLICATION ON"
+        "WITH_GLFWAPPLICATION OFF"
         "WITH_MESHTOOLS OFF"
         "WITH_TRADE ON"
         "WITH_TEXT OFF"
@@ -51,24 +61,24 @@ set(IMGUI_DIR ${imgui_SOURCE_DIR})
 CPMAddPackage(
     NAME magnum-integration
     GITHUB_REPOSITORY mosra/magnum-integration
-    GIT_TAG a6c469de651032746a965c5aa83c243ca6a097a6
+    GIT_TAG 2c2737621f3f7bb17bba4e5342f68e68476a5677
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
         "BUILD_STATIC ON"
-        "WITH_IMGUI ON"
+        "MAGNUM_WITH_IMGUI ON"
 )
 
 CPMAddPackage(
     NAME magnum-plugins
     GITHUB_REPOSITORY mosra/magnum-plugins
-    GIT_TAG b0f2818b781eb0fb6a8a76095a6529fc85d442f3
+    GIT_TAG 1c9d360aa21a3788f32b2d94ad45c39841702a39
     GIT_SUBMODULES "src"
     EXCLUDE_FROM_ALL YES
     OPTIONS
         "BUILD_STATIC ON"
-        "WITH_STBIMAGEIMPORTER ON"
-        "WITH_DDSIMPORTER ON"
+        "MAGNUM_WITH_STBIMAGEIMPORTER ON"
+        "MAGNUM_WITH_DDSIMPORTER ON"
 )
 
 CPMAddPackage(
@@ -116,10 +126,11 @@ CPMAddPackage(
 # Use modules from magnum-integration since it has everything we need
 set(CMAKE_MODULE_PATH "${magnum-integration_SOURCE_DIR}/modules" ${CMAKE_MODULE_PATH})
 
-find_package(Magnum REQUIRED GL GlfwApplication Trade)
+find_package(Magnum REQUIRED GL Sdl2Application Trade)
 find_package(MagnumIntegration REQUIRED ImGui)
 find_package(ImGui REQUIRED SourcesMiscCpp)
 find_package(libpng REQUIRED)
+
 
 # Ensure FastNoise.dll is built into the same dir as NoiseTool.exe
 set_target_properties(FastNoise
@@ -138,13 +149,13 @@ corrade_add_resource(NoiseTool_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/resources.
 add_executable(NoiseTool
     "NoiseToolApp.cpp"
     "FastNoiseNodeEditor.cpp"
-    "MeshNoisePreview.cpp"
+    
     "NoiseTexture.cpp"
     "${imnodes_SOURCE_DIR}/imnodes.cpp"
     ${NoiseTool_RESOURCES}
     "${NoiseTool_RESOURCES_DIR}/icon.rc"
     "ImGuiFileDialog.cpp"
- "EditableHeightmap.cpp") 
+ "EditableHeightmap.cpp" "ToolWindow.cpp") 
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
 target_include_directories(NoiseTool PRIVATE 
@@ -152,7 +163,6 @@ target_include_directories(NoiseTool PRIVATE
     "${libpng_SOURCE_DIR}"
     "${libpng_BINARY_DIR}")
 
-message("PNG Include: "${libpng_BINARY_DIR} )
 target_link_libraries(NoiseTool PRIVATE
     FastNoise
     Magnum::Application
@@ -164,6 +174,7 @@ target_link_libraries(NoiseTool PRIVATE
     robin_hood
     zlib
     png_static
+    SDL2::SDL2
 )
 add_dependencies(NoiseTool MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
 # Windows HiDPI support
