@@ -31,4 +31,54 @@ namespace Magnum
         }
         return clicked;
     }
+
+
+    inline bool ToggleButton( char const* name, bool& toggle, ImVec2 size, const char* desc )
+    {
+        bool        clicked = false;
+        std::string nameAlt = "##";
+        nameAlt += name;
+        auto x = ImGui::GetCursorPosX();
+        if( ImGui::InvisibleButton( nameAlt.c_str(), ImVec2( 20, 20 ) ) )
+            clicked = true;
+
+        if( ImGui::IsItemHovered() )
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted( desc );
+            ImGui::EndTooltip();
+
+            ImGui::PushStyleColor( ImGuiCol_Text, ImGui::GetStyleColorVec4( ImGuiCol_ButtonHovered ) );
+        }
+        else if( toggle )
+        {
+            ImGui::PushStyleColor( ImGuiCol_Text, ImGui::GetStyleColorVec4( ImGuiCol_ButtonActive ) );
+        }
+        else
+            ImGui::PushStyleColor( ImGuiCol_Text, ImGui::GetStyleColorVec4( ImGuiCol_Text ) );
+
+        ImGui::SameLine();
+        ImGui::SetCursorPosX( x );
+        ImGui::Text( name );
+
+        ImGui::PopStyleColor();
+
+        if( clicked )
+            toggle = !toggle;
+        return toggle;
+    }
+
+    inline bool Button( const char* name, const char* desc )
+    {
+        bool result = ImGui::Button( name );
+
+        if( ImGui::IsItemHovered() )
+        {
+            ImGui::BeginTooltip();
+            ImGui::TextUnformatted( desc );
+            ImGui::EndTooltip();
+        }
+
+        return result;
+    }
 } // namespace Magnum

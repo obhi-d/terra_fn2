@@ -21,12 +21,24 @@
 
 namespace Magnum
 {
+    struct NodeStyleDesc
+    {
+        ImVec4 title;
+        ImVec4 titleHovered;
+        ImVec4 titleSelected;
+        ImVec4 buttonHover;
+        ImVec4 buttonActive;
+        ImVec4 textColor;
+    };
+
+    using NodeStyle = uint16_t;
+
     class FastNoiseNodeEditor
     {
     public:
         FastNoiseNodeEditor();
         void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition );
-        void DrawEditor( ToolWindow& window );
+        void DrawEditor();
         void DrawTexture();
         void SetSIMDLevel( FastSIMD::eLevel lvl );
         void AddHistoryRecord();
@@ -37,6 +49,21 @@ namespace Magnum
         Vector2i GetMeshGridSize() const
         {
             return mMeshNoisePreview.GetGridSize();
+        }
+
+        void ResetOffsets()
+        {
+            mMeshNoisePreview.ResetOffsets();
+        }
+
+        Vector2 GetCenter() const
+        {
+            return mMeshNoisePreview.GetCenter();
+        }
+
+        Vector2 GetOffset() const
+        {
+            return mMeshNoisePreview.GetOffset();
         }
 
     private:
@@ -163,7 +190,8 @@ namespace Magnum
 
         std::string mLastImportImagePath;
 
-        bool mImportNodeModal = false;
+        bool mImportNodeModal  = false;
+        bool mEnableTexPreview = false;
 
         EditableHeightmap mMeshNoisePreview;
         NoiseTexture      mNoiseTexture;
@@ -182,5 +210,7 @@ namespace Magnum
 
         FastNoise::ImageDataView mSelectedImage;
         History                  mHistory;
+
+        std::vector<NodeStyle> mNodeStyles;
     };
 } // namespace Magnum

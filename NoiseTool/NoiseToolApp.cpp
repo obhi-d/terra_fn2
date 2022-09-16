@@ -14,6 +14,7 @@
 #include "NoiseToolApp.h"
 
 #include "FastNoise/ImageData.h"
+#include "ImGuiUtils.h"
 #include "ImageImporter.h"
 #include "SDL.h"
 
@@ -80,12 +81,20 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     }
 
     mWindowID = SDL_GetWindowID( window() );
+
     createEditorWindows();
+    if( !mExternalNodeEditor )
+        mNodes.hide();
 }
 
 NoiseToolApp::~NoiseToolApp()
 {
-    quit();
+    mSkipDraw = true;
+    ImGui::SetCurrentContext( mImGuiContextMain );
+    // Avoid trying to save settings after node editor is already destroyed
+    ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
+    ImGui::GetIO().IniFilename = nullptr;
+    mNodes.destroy();
 }
 
 void Magnum::NoiseToolApp::addFont( Vector2i windowSize, Vector2i framebufferSize, Vector2 dpiScaling )
@@ -174,10 +183,10 @@ void NoiseToolApp::drawEvent()
 
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::DockSpaceOverViewport( viewport, ImGuiDockNodeFlags_PassthruCentralNode );
-
+    bool setEditorRect = false;
     if( ImGui::Begin( "Parameters" ) )
     {
-        if( ImGui::Button( "Reset State" ) )
+        if( Magnum::Button( ICON_FA_RECYCLE, "Reset all states." ) )
         {
             ImGui::ClearIniSettings();
             mNodeEditor.~FastNoiseNodeEditor();
@@ -185,31 +194,77 @@ void NoiseToolApp::drawEvent()
             ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
         }
 
-        if( ImGui::Button( ICON_FA_TOOLBOX ) )
+        ImGui::SameLine();
+
+        if( Magnum::Button( ICON_FA_TOOLBOX, "Show Node Editor." ) )
         {
             mNodes.show();
         }
 
-        if( ImGui::ColorEdit3( "Clear Color", mClearColor.data() ) )
+        ImGui::SameLine();
+
+        if( !mExternalNodeEditor )
+        {
+            if( Magnum::Button( ICON_FA_UP_RIGHT_AND_DOWN_LEFT_FROM_CENTER,
+                                "Pop out Node Editor to external Window." ) )
+            {
+                mNodes.show();
+                mExternalNodeEditor = true;
+            }
+        }
+
+        else
+        {
+            if( Magnum::Button( ICON_FA_DOWN_LEFT_AND_UP_RIGHT_TO_CENTER, "Pop in Node Editor inside main window." ) )
+            {
+                mNodes.hide();
+                if( !mExternalNodeEditor )
+                    setEditorRect = true;
+                mExternalNodeEditor = false;
+            }
+        }
+
+        ImGui::SameLine();
+
+        if( ImGui::ColorEdit3( "", mClearColor.data(), ImGuiColorEditFlags_::ImGuiColorEditFlags_NoInputs ) )
             GL::Renderer::setClearColor( mClearColor );
 
-        ImGui::Checkbox( "Backface Culling", &mBackFaceCulling );
+        ImGui::SameLine();
 
-        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
-                     Double( ImGui::GetIO().Framerate ) );
+        Magnum::ToggleButton( ICON_FA_CUBE, mBackFaceCulling, ImVec2( 20, 20 ),
+                              mBackFaceCulling ? "Disable backface culling" : "Enable backface culling" );
 
-        if( ImGui::Combo( "Max SIMD Level", &mMaxSIMDLevel, mLevelNames.data(), (int)mLevelEnums.size() ) ||
-            ImGuiExtra::ScrollCombo( &mMaxSIMDLevel, (int)mLevelEnums.size() ) )
+
+        ImGui::SameLine();
+
+        if( Magnum::Button( ICON_FA_BULLSEYE, "Reset heightmap offsets" ) )
         {
-            FastSIMD::eLevel newLevel = mLevelEnums[mMaxSIMDLevel];
-            mNodeEditor.SetSIMDLevel( newLevel );
+            mNodeEditor.ResetOffsets();
         }
+
+        ImGui::SameLine();
+
+        if( Magnum::Button( ICON_FA_CAMERA_RETRO, "Reset camera" ) )
+        {
+            recomputeCamera();
+        }
+
+        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS), Cam: %f, %f",
+                     1000.0 / Double( ImGui::GetIO().Framerate ), Double( ImGui::GetIO().Framerate ), mLookAngle.x(),
+                     mLookAngle.y() );
     }
 
     mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(),
                       mCameraObject.transformation().translation() );
 
+
     ImGui::End();
+
+    auto endMainWindow = [this]() {
+        mImGuiIntegrationContext.updateApplicationCursor( *this );
+        mImGuiIntegrationContext.drawFrame();
+        swapBuffers();
+    };
 
     mNodeEditor.DrawTexture();
 
@@ -220,12 +275,12 @@ void NoiseToolApp::drawEvent()
     GL::Renderer::disable( GL::Renderer::Feature::DepthTest );
     GL::Renderer::disable( GL::Renderer::Feature::FaceCulling );
 
-    mImGuiIntegrationContext.updateApplicationCursor( *this );
-    mImGuiIntegrationContext.drawFrame();
 
-    swapBuffers();
-
-    mNodes.beginDraw( *this );
+    if( mExternalNodeEditor )
+    {
+        endMainWindow();
+        mNodes.beginDraw( *this );
+    }
 
     /* Enable text input, if needed */
     if( ImGui::GetIO().WantTextInput && !isTextInputActive() )
@@ -233,9 +288,24 @@ void NoiseToolApp::drawEvent()
     else if( !ImGui::GetIO().WantTextInput && isTextInputActive() )
         stopTextInput();
 
-    mNodeEditor.DrawEditor( mNodes );
+    if( mExternalNodeEditor )
+    {
+        auto size = mNodes.windowSize();
+        ImGui::SetNextWindowSize( ImVec2( size.x(), size.y() ) );
+        ImGui::SetNextWindowPos( ImVec2( 0, 0 ) );
+    }
+    else if( setEditorRect )
+    {
+        ImGui::SetNextWindowSize( ImVec2( 1024, 768 ) );
+        ImGui::SetNextWindowPos( ImVec2( 8, 10 ) );
+    }
 
-    mNodes.endDraw( *this );
+    mNodeEditor.DrawEditor();
+
+    if( mExternalNodeEditor )
+        mNodes.endDraw( *this );
+    else
+        endMainWindow();
 
     redraw();
 
@@ -364,6 +434,8 @@ void NoiseToolApp::keyPressEvent( KeyEvent& event )
         mNodes.keyPressEvent( event );
     else
     {
+        if( mImGuiIntegrationContext.handleKeyPressEvent( event ) )
+            return;
         if( handleKeyEvent( event.key(), true ) )
             return;
 
@@ -377,9 +449,13 @@ void NoiseToolApp::keyReleaseEvent( KeyEvent& event )
         mNodes.keyReleaseEvent( event );
     else
     {
+        if( mImGuiIntegrationContext.handleKeyReleaseEvent( event ) )
+        {
+            ImGui::GetIO().AddInputCharacter( (char)event.event().key.keysym.sym );
+            return;
+        }
         if( handleKeyEvent( event.key(), false ) )
             return;
-
         HandleKeyEvent( event.key(), false );
     }
 }
@@ -551,13 +627,14 @@ void NoiseToolApp::textInputEvent( TextInputEvent& event )
 void NoiseToolApp::UpdatePespectiveProjection()
 {
     mCamera.setProjectionMatrix(
-        Matrix4::perspectiveProjection( Deg( 70.0f ), Vector2 { windowSize() }.aspectRatio(), 2.0f, 3500.0f ) );
+        Matrix4::perspectiveProjection( Deg( mFOV ), Vector2 { windowSize() }.aspectRatio(), mNearPlane, mFarPlane ) );
 }
 
 void NoiseToolApp::anyEvent( SDL_Event& event )
 {
     if( event.type == SDL_WINDOWEVENT )
     {
+
         if( event.window.event == SDL_WINDOWEVENT_CLOSE )
         {
             if( event.window.windowID == mNodes.id() )
@@ -565,20 +642,55 @@ void NoiseToolApp::anyEvent( SDL_Event& event )
             else
             {
                 quit();
-                exit( 0 );
             }
+        }
+        else
+        {
+            if( event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED )
+            {
+                SDL_SetWindowInputFocus( SDL_GetWindowFromID( event.window.windowID ) );
+            }
+            if( event.window.windowID == mNodes.id() )
+                mNodes.anyEvent( event );
         }
     }
 }
 
 void NoiseToolApp::quit()
 {
-    mSkipDraw = true;
-    ImGui::SetCurrentContext( mImGuiContextMain );
-    // Avoid trying to save settings after node editor is already destroyed
-    ImGui::SaveIniSettingsToDisk( ImGui::GetIO().IniFilename );
-    ImGui::GetIO().IniFilename = nullptr;
-    mNodes.destroy();
+    SDL_Event ev;
+    ev.type = SDL_QUIT;
+    SDL_PushEvent( &ev );
+}
+
+void NoiseToolApp::recomputeCamera()
+{
+
+    auto sx = (float)mNodeEditor.GetMeshGridSize().x();
+
+    auto d = std::tan( mFOV ) * sx;
+    auto y = d / std::sin( (float)Rad( Deg( mCamDefaultLookAtAngle ) ) ) * 0.5;
+    auto z = mNodeEditor.GetMeshGridSize().y() * 0.6;
+
+    auto eye       = Vector3( 0, y, z );
+    auto origin    = Vector3( 0, 0, 0 );
+    auto transform = Matrix4::lookAt( eye, origin, Vector3::yAxis() );
+    // float dist      = ( origin - eye ).length();
+
+    mLookAngle.x() = 0;
+    mLookAngle.y() = -mCamDefaultLookAtAngle;
+
+    const Vector3 translation = eye;
+    const Matrix4 rotation =
+        Matrix4::rotationY( Deg { mLookAngle.x() } ) * Matrix4::rotationX( Deg { mLookAngle.y() } );
+
+    mCameraObject.setTransformation( Matrix4::lookAt(
+        translation, translation - rotation.rotationNormalized() * Vector3::zAxis(), Vector3::yAxis() ) );
+
+    // mLookAngle.x() = 0;
+    // mLookAngle.y() = -(float)Deg( Rad( std::atan2( y, dist ) ) ) ;
+
+    // mCameraObject.setTransformation( transform );
 }
 
 MAGNUM_APPLICATION_MAIN( NoiseToolApp )

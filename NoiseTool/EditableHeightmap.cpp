@@ -13,6 +13,15 @@ namespace Magnum
         RegenreateGrid();
     }
 
+    void EditableHeightmap::ResetOffsets()
+    {
+        auto oldOffset = offset;
+        offset.x()     = -heightmapSize.x() / 2;
+        offset.y()     = -heightmapSize.y() / 2;
+        if( offset != heightmapSize )
+            edited = true;
+    }
+
     void EditableHeightmap::RegenreateGrid()
     {
         auto  data    = std::vector<Vector2>( ( heightmapSize.y() + 1 ) * ( heightmapSize.x() + 1 ) );
@@ -38,11 +47,11 @@ namespace Magnum
                 auto patchId         = ( y * heightmapSize.x() + x ) * 6;
                 auto vertId          = ( y * ( heightmapSize.x() + 1 ) + x );
                 indices[patchId + 0] = vertId;
-                indices[patchId + 1] = vertId + 1;
-                indices[patchId + 2] = vertId + heightmapSize.x() + 1;
+                indices[patchId + 2] = vertId + 1;
+                indices[patchId + 1] = vertId + heightmapSize.x() + 1;
                 indices[patchId + 3] = vertId + 1;
-                indices[patchId + 4] = vertId + heightmapSize.x() + 2;
-                indices[patchId + 5] = vertId + heightmapSize.x() + 1;
+                indices[patchId + 5] = vertId + heightmapSize.x() + 2;
+                indices[patchId + 4] = vertId + heightmapSize.x() + 1;
             }
         }
 
@@ -93,22 +102,12 @@ namespace Magnum
         Frustum camFrustum = Frustum::fromMatrix( transformationProjection );
         shader.SetTransformationProjectionMatrix( transformationProjection );
 
-        bool edited = false;
-
 
         edited |= ImGui::DragInt( "Seed", &seed );
         edited |= ImGui::DragFloat( "Frequency", &frequency, 0.0005f, 0, 0, "%.4f" );
         edited |= ImGui::DragInt2( "Offset", offset.data() );
-        ImGui::SameLine();
-        if( ImGui::Button( ICON_FA_BULLSEYE ) )
-        {
-            auto oldOffset = offset;
-            offset.x()     = -heightmapSize.x() / 2;
-            offset.y()     = -heightmapSize.y() / 2;
-            if( offset != heightmapSize )
-                edited = true;
-        }
-        edited |= ImGui::DragInt2( "Size", heightmapSize.data() );
+
+        edited |= ImGui::DragInt2( "Size", heightmapSize.data(), 1, 2, std::numeric_limits<int>::max() );
 
         if( ImGui::DragFloat( "Heightmap Multiplier", &heightMultiplier, 0.5f ) || firstDraw )
         {
@@ -215,6 +214,7 @@ namespace Magnum
 
         if( edited || firstDraw )
         {
+            edited = false;
             RegenreateGrid();
             ImGuiExtra::MarkSettingsDirty();
         }

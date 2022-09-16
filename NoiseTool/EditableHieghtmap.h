@@ -39,6 +39,19 @@ namespace Magnum
             return heightmapSize;
         }
 
+        void ResetOffsets();
+
+        Vector2 GetCenter() const
+        {
+            return Vector2( offset ) + Vector2( heightmapSize ) * 0.5;
+        }
+
+        Vector2 GetOffset() const
+        {
+            return Vector2( offset );
+        }
+
+
     private:
         void RegenreateGrid();
         void UpdateHeights();
@@ -125,5 +138,6 @@ namespace Magnum
         Shader                    shader;
         bool                      heightsDirty = true;
         bool                      firstDraw    = true;
+        bool                      edited       = false;
     };
 } // namespace Magnum

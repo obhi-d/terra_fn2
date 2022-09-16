@@ -144,8 +144,9 @@ namespace Magnum
         void SetupSettingsHandlers();
         void SetPreviewTexture( ImageView2D& imageView );
 
-        bool            mDisableGrid = false;
-        std::string     mName;
+        bool mDisableGrid = false;
+
+        std::string     mName           = "unnamed";
         std::atomic_int mExportProgress = 0;
         std::string     mStatus;
         GL::Texture2D   mNoiseTexture;

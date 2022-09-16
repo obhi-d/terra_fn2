@@ -19,6 +19,7 @@ namespace Magnum
         }
 
     private:
+        void recomputeCamera();
         void quit();
         void createEditorWindows();
         void drawEvent() override;
@@ -75,9 +76,16 @@ namespace Magnum
             Key_Count
         };
 
-        int                         mWindowID        = 0;
-        std::array<bool, Key_Count> mKeyDown         = {};
-        bool                        mBackFaceCulling = false;
-        bool                        mSkipDraw        = false;
+        float mCamDefaultLookAtAngle = 45.0f;
+
+        float mFOV       = 70.0f;
+        float mFarPlane  = 5000.0f;
+        float mNearPlane = 1.0f;
+
+        int                         mWindowID           = 0;
+        std::array<bool, Key_Count> mKeyDown            = {};
+        bool                        mBackFaceCulling    = false;
+        bool                        mSkipDraw           = false;
+        bool                        mExternalNodeEditor = true;
     };
 } // namespace Magnum

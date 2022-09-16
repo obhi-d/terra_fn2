@@ -3,15 +3,32 @@
 #include "IconsFontAwesome6.h"
 #include "ImGuiUtils.h"
 #include "NoiseToolApp.h"
+#include "SDL.h"
+
+void Magnum::ToolWindow::anyEvent( SDL_Event& event )
+{
+    if( event.type == SDL_WINDOWEVENT )
+    {
+        if( event.window.event == SDL_WINDOWEVENT_MAXIMIZED )
+        {
+            _maximized = true;
+            auto size  = windowSize();
+            SDL_MaximizeWindow( _window );
+            int x, y;
+            SDL_GL_GetDrawableSize( _window, &x, &y );
+            auto oldSize = windowSize();
+        }
+    }
+}
 
 void Magnum::ToolWindow::create( Platform::Application& app, std::string_view name, Vector2i size, Vector2 dpi )
 {
     _dpiScaling = dpi;
 
     const Vector2i scaledWindowSize = size * _dpiScaling;
-    _window                         = SDL_CreateWindow(
-                                name.data(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, scaledWindowSize.x(), scaledWindowSize.y(),
-                                SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS );
+    _window =
+        SDL_CreateWindow( name.data(), SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, scaledWindowSize.x(),
+                          scaledWindowSize.y(), SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE );
 
     if( _window )
         _windowID = SDL_GetWindowID( _window );
@@ -33,25 +50,39 @@ void Magnum::ToolWindow::beginDraw( Platform::Application& app )
     GL::defaultFramebuffer.setViewport( { {}, framebufferSize() } );
     GL::defaultFramebuffer.clear( GL::FramebufferClear::Color );
     _imguiIntegration.newFrame();
-    // glfwMakeContextCurrent( _window );
-    // GL::defaultFramebuffer.clear( GL::FramebufferClear::Color | GL::FramebufferClear::Depth );
-    // _imguiIntegration.newFrame();
 }
 
 void Magnum::ToolWindow::endDraw( Platform::Application& app )
 {
     _imguiIntegration.drawFrame();
     SDL_GL_SwapWindow( _window );
+    if( _maximize )
+    {
+        auto size = windowSize();
+        SDL_MaximizeWindow( _window );
+        int x, y;
+        SDL_GL_GetDrawableSize( _window, &x, &y );
+        auto oldSize = windowSize();
+        _maximize    = false;
+    }
+    else if( _restore )
+    {
+        SDL_RestoreWindow( _window );
+        _restore = false;
+    }
 }
 
 void Magnum::ToolWindow::viewportEvent( ViewportEvent& event )
 {
+
+    _maximized  = false;
     _dpiScaling = event.dpiScaling();
     _imguiIntegration.relayout( Vector2 { windowSize() } / event.dpiScaling(), windowSize(), framebufferSize() );
 }
 
 void Magnum::ToolWindow::handleKeyEvent( KeyEvent::Key key, bool value )
 {
+
     ImGui::SetCurrentContext( _imguiIntegration.context() );
     ImGuiIO& io = ImGui::GetIO();
 
@@ -144,10 +175,18 @@ void Magnum::ToolWindow::handleKeyEvent( KeyEvent::Key key, bool value )
 }
 void Magnum::ToolWindow::keyPressEvent( KeyEvent& event )
 {
+    if( imgui().handleKeyPressEvent( event ) )
+        return;
     handleKeyEvent( event.key(), true );
 }
 void Magnum::ToolWindow::keyReleaseEvent( KeyEvent& event )
 {
+    if( imgui().handleKeyReleaseEvent( event ) )
+    {
+        ImGui::GetIO().AddInputCharacter( (char)event.event().key.keysym.sym );
+        return;
+    }
+
     handleKeyEvent( event.key(), false );
 }
 void Magnum::ToolWindow::mousePressEvent( MouseEvent& event )
@@ -182,9 +221,17 @@ void Magnum::ToolWindow::textInputEvent( TextInputEvent& event )
 
 void Magnum::ToolWindow::drawWindowControls( float xSize )
 {
+    /*
     auto higlightColor = ImGui::GetColorU32( ImVec4( 0.6f, 0.2f, 0.2f, 1.0f ) );
 
     ImGui::SameLine();
     if( IconButton( ICON_FA_CIRCLE_XMARK, xSize - 30, ImVec2( 20, 20 ), higlightColor ) )
         hide();
+    ImGui::SameLine();
+    if( IconButton( ICON_FA_CIRCLE_DOT, xSize - 50, ImVec2( 20, 20 ), higlightColor ) )
+        restore();
+    ImGui::SameLine();
+    if( IconButton( ICON_FA_CIRCLE_PLUS, xSize - 70, ImVec2( 20, 20 ), higlightColor ) )
+        maximize();
+        */
 }

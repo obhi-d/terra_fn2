@@ -52,7 +52,7 @@ void main()
 #else
         lightY = texture(heightColorMapY, clamp(interpolatedLight.y, 0.0, 1.0)) * interpolatedLight.x;
 #endif
-    if(!gl_FrontFacing) 
+    if(gl_FrontFacing) 
     { 
         lightY = (1.0 - lightY) * 0.08;
     }

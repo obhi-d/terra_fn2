@@ -18,6 +18,7 @@
 
 #include "FastNoiseNodeEditor.h"
 #include "ImGuiExtra.h"
+#include "ImGuiUtils.h"
 #include "NoiseTexture.h"
 
 #include "IconsFontAwesome6.h"

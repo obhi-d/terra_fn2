@@ -29,6 +29,11 @@ namespace Magnum
         using TextInputEvent   = Platform::Application::TextInputEvent;
         using ViewportEvent    = Platform::Application::ViewportEvent;
 
+        auto& imgui()
+        {
+            return _imguiIntegration;
+        }
+
         void relayout()
         {
             _imguiIntegration.relayout( windowSize() );
@@ -74,7 +79,7 @@ namespace Magnum
 
         void moveWindow( int x, int y )
         {
-            if( isMaximized )
+            if( _maximized )
                 restore();
             _windowLastPos.x() += x;
             _windowLastPos.y() += y;
@@ -90,6 +95,7 @@ namespace Magnum
         virtual void mouseMoveEvent( MouseMoveEvent& event );
         virtual void mouseScrollEvent( MouseScrollEvent& event );
         virtual void textInputEvent( TextInputEvent& event );
+        virtual void anyEvent( SDL_Event& );
 
         virtual void handleKeyEvent( KeyEvent::Key key, bool value );
 
@@ -97,14 +103,12 @@ namespace Magnum
 
         void maximize()
         {
-            SDL_MaximizeWindow( _window );
-            isMaximized = true;
+            _maximize = true;
         }
 
         void restore()
         {
-            SDL_RestoreWindow( _window );
-            isMaximized = false;
+            _restore = true;
         }
 
         void hide()
@@ -133,7 +137,10 @@ namespace Magnum
         }
 
     private:
-        bool     isMaximized = false;
+        bool _maximize  = false;
+        bool _restore   = false;
+        bool _maximized = false;
+
         Vector2i _windowLastPos;
         // void                      onResize( int w, int h );
         SDL_Window*               _window = nullptr;
