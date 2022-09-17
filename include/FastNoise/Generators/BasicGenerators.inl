@@ -17,6 +17,10 @@ class FS_T<FastNoise::Constant, FS> : public virtual FastNoise::Constant, public
         auto           BlockSize = i.MaxVectorsInBlock();
         for( std::uint32_t b = 0; b < BlockSize; ++b )
             o.output[b] = value;
+        // i.UV( b, u )[1];
+        // i.LinearDistance( b, u );
+        // i.UV( b, u )[1];
+        // value;
     }
 };
 
@@ -166,18 +170,15 @@ class FS_T<FastNoise::StrataMask, FS> : public virtual FastNoise::StrataMask, pu
             this->GetSourceValue( mScale[0], params, u, i, scaleX );
             this->GetSourceValue( mScale[1], params, u, i, scaleY );
 
-            auto fullX  = float32v( u.recipSize[0] );
-            auto fullY  = float32v( u.recipSize[1] );
-            auto offX   = float32v( u.offset[0] );
-            auto offY   = float32v( u.offset[1] );
             auto minS   = float32v( mMinScale );
             auto rangeS = float32v( mMaxScale - mMinScale );
 
             auto BlockSize = i.MaxVectorsInBlock();
             for( std::uint32_t b = 0; b < BlockSize; ++b )
             {
-                auto vecU = FS_FMulAdd_f32( ( i.v[b][0] - offX ), scaleX[b] * fullX, float32v( offsetX[b] ) );
-                auto vecV = FS_FMulAdd_f32( ( i.v[b][1] - offY ), scaleY[b] * fullY, float32v( offsetY[b] ) );
+                auto uv   = i.UV( b, u );
+                auto vecU = FS_FMulAdd_f32( uv[0], scaleX[b], float32v( offsetX[b] ) );
+                auto vecV = FS_FMulAdd_f32( uv[1], scaleY[b], float32v( offsetY[b] ) );
 
 
                 float32v sample;
@@ -270,8 +271,8 @@ class FS_T<FastNoise::CurveGen, FS> : public virtual FastNoise::CurveGen, public
 };
 
 template<typename FS>
-class FS_T<FastNoise::RandomConstant, FS> : public virtual FastNoise::RandomConstant,
-                                            public FS_T<FastNoise::Generator, FS>
+class FS_T<FastNoise::GridRandomConstant, FS> : public virtual FastNoise::GridRandomConstant,
+                                                public FS_T<FastNoise::Generator, FS>
 {
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
@@ -279,17 +280,29 @@ class FS_T<FastNoise::RandomConstant, FS> : public virtual FastNoise::RandomCons
     template<typename Input>
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
-        constexpr auto N    = Input::N;
-        auto           seed = u.seed;
-        seed                = ( seed - ( u.ctx.planeId[0] * 17 ) );
-        seed                = ( seed - ( u.ctx.planeId[1] * 17 ) );
-        seed += mSeedOffset;
-        seed ^= ( seed << 13 );
-        seed ^= ( seed << 17 );
-        seed ^= ( seed << 5 );
-        auto value     = float32v( mMin + ( ( ( seed % 1000000 ) / 1000000.f ) * ( mMax - mMin ) ) );
+        constexpr auto N = Input::N;
+
         auto BlockSize = i.MaxVectorsInBlock();
+        auto gridYSize = float32v( (float)u.recipSize[1] );
+        auto min       = float32v( mMin );
+        auto range     = float32v( mMax ) - min;
+
         for( std::uint32_t b = 0; b < BlockSize; ++b )
-            o.output[b] = value;
+        {
+            auto      grid  = i.GridId( b, u );
+            auto      ids   = FS_Castf32_i32( FS_FMulAdd_f32( grid[0], gridYSize, grid[1] ) );
+            uint32_t* id    = (uint32_t*)&ids;
+            float32v& value = o.output[b];
+            float*    fv    = (float*)&value;
+            for( uint p = 0; p < FS_Size_32(); ++p )
+            {
+                id[p] = ( id[p] - mSeedOffset );
+                id[p] ^= ( id[p] << 13 );
+                id[p] ^= ( id[p] << 17 );
+                id[p] ^= ( id[p] << 5 );
+                fv[p] = ( ( *( id + p ) % 1000 ) / 1000.0f );
+            }
+            o.output[b] = FS_FMulAdd_f32( value, range, min );
+        }
     }
 };

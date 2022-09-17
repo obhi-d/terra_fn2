@@ -52,7 +52,7 @@ source_group("FastNoise" FILES ${FastNoise_headers})
 source_group("FastNoise" FILES ${FastNoise_source})
 source_group("FastNoise\\Generators" FILES ${FastNoise_generators_headers})
 
-add_library(FastNoise
+add_library(FastNoise 
     ${FastNoise_headers}
     ${FastNoise_source}
     ${FastNoise_generators_headers}

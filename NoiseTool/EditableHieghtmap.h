@@ -36,14 +36,17 @@ namespace Magnum
 
         Vector2i GetGridSize() const
         {
-            return heightmapSize;
+            return gridSize;
         }
-
-        void ResetOffsets();
 
         Vector2 GetCenter() const
         {
-            return Vector2( offset ) + Vector2( heightmapSize ) * 0.5;
+            return Vector2( offset ) + Vector2( gridSize * gridCount ) * 0.5;
+        }
+
+        Vector2 GetMapSize() const
+        {
+            return Vector2( gridSize * gridCount );
         }
 
         Vector2 GetOffset() const
@@ -51,6 +54,7 @@ namespace Magnum
             return Vector2( offset );
         }
 
+        void ResetOffsets();
 
     private:
         void RegenreateGrid();
@@ -123,15 +127,18 @@ namespace Magnum
         float                                            sunIntensity     = 1.0f;
         Rotation                                         sunRotation;
         int32_t                                          compressPrec = 31;
+        FastNoise::OutputMinMax                          minMax;
         // Bound settings
 
         ColorLayerValue strataColorPerHeight;
-        Vector2i        offset        = Vector2i( -64, -64 );
-        Vector2i        heightmapSize = Vector2i( 128, 128 );
+        Vector2i        offset    = Vector2i( -64, -64 );
+        Vector2i        gridSize  = Vector2i( 128, 128 );
+        Vector2i        gridCount = Vector2i( 1, 1 );
 
-        GL::Buffer        xyBuffer;
-        GL::Buffer        heightBuffer;
-        GL::Buffer        indexBuffer;
+        GL::Buffer xyBuffer;
+        GL::Buffer heightBuffer;
+        GL::Buffer indexBuffer;
+        // buffer, offset, x,y
         FastNoise::Buffer heights;
 
         std::unique_ptr<GL::Mesh> mesh;

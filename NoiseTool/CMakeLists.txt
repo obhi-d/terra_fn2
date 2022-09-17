@@ -104,6 +104,7 @@ CPMAddPackage(
     EXCLUDE_FROM_ALL YES
     OPTIONS
         "BUILD_STATIC ON"
+        "BUILD_SHARED OFF"
 )
 
 set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
@@ -146,24 +147,25 @@ set(NoiseTool_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 configure_file("resources.conf" "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
 corrade_add_resource(NoiseTool_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
 
-add_executable(NoiseTool
+add_executable(Terra
     "NoiseToolApp.cpp"
     "FastNoiseNodeEditor.cpp"
-    
     "NoiseTexture.cpp"
     "${imnodes_SOURCE_DIR}/imnodes.cpp"
     ${NoiseTool_RESOURCES}
     "${NoiseTool_RESOURCES_DIR}/icon.rc"
     "ImGuiFileDialog.cpp"
- "EditableHeightmap.cpp" "ToolWindow.cpp") 
+    "EditableHeightmap.cpp" 
+    "ToolWindow.cpp"
+    "Worker.cpp") 
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
-target_include_directories(NoiseTool PRIVATE 
+target_include_directories(Terra PRIVATE 
     "${imnodes_SOURCE_DIR}"
     "${libpng_SOURCE_DIR}"
     "${libpng_BINARY_DIR}")
 
-target_link_libraries(NoiseTool PRIVATE
+target_link_libraries(Terra PRIVATE
     FastNoise
     Magnum::Application
     Magnum::Shaders
@@ -176,29 +178,29 @@ target_link_libraries(NoiseTool PRIVATE
     png_static
     SDL2::SDL2
 )
-add_dependencies(NoiseTool MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
+add_dependencies(Terra MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
 # Windows HiDPI support
 if(CORRADE_TARGET_WINDOWS)
-    target_sources(NoiseTool PRIVATE WindowsHiDPI.manifest)
+    target_sources(Terra PRIVATE WindowsHiDPI.manifest)
 endif()
 
 if (UNIX)
-    target_link_options(NoiseTool PRIVATE -pthread)
+    target_link_options(Terra PRIVATE -pthread)
 
     if(APPLE)
-        set_property(TARGET NoiseTool PROPERTY
+        set_property(TARGET Terra PROPERTY
             INSTALL_RPATH "@loader_path/../lib")
     else()
-        set_property(TARGET NoiseTool PROPERTY
+        set_property(TARGET Terra PROPERTY
             INSTALL_RPATH "\$ORIGIN/../lib")
     endif()
 endif()
 
 if (MSVC)
-    target_compile_definitions(NoiseTool PRIVATE _CRT_SECURE_NO_WARNINGS=1)
+    target_compile_definitions(Terra PRIVATE _CRT_SECURE_NO_WARNINGS=1)
 endif()
 
-set(install_targets ${install_targets} NoiseTool PARENT_SCOPE)
+set(install_targets ${install_targets} Terra PARENT_SCOPE)
 
 # Make the executable a default target to build & run in Visual Studio
 set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT NoiseTool)

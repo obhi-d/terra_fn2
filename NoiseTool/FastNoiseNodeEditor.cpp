@@ -37,6 +37,13 @@ std::array<NodeStyleDesc, 4> gStyles =
 };
 // clang-format on
 
+
+void Import( FastNoise::ImageData& other )
+{
+    if( !other.sourceName.empty() )
+        other = ImportImage( other.sourceName );
+}
+
 bool MatchingGroup( const std::vector<const char*>& a, const std::vector<const char*>& b )
 {
     std::string aString;
@@ -101,41 +108,51 @@ void FastNoiseNodeEditor::Node::GeneratePreview( bool nodeTreeChanged, bool benc
         generateAverages.clear();
     }
 
-    if( generator )
+    if( editor.IsTexturePreviewEnabled() )
     {
-        auto genRGB = FastNoise::New<FastNoise::ConvertRGBA8>( editor.mMaxSIMDLevel );
-        genRGB->SetSource( generator );
 
-        auto startTime = std::chrono::high_resolution_clock::now();
+        if( generator )
+        {
+            auto genRGB = FastNoise::New<FastNoise::ConvertRGBA8>( editor.mMaxSIMDLevel );
+            genRGB->SetSource( generator );
 
-        editor.GenerateNodePreviewNoise( genRGB.get(), noiseData );
+            auto startTime = std::chrono::high_resolution_clock::now();
 
-        generateAverages.push_back( std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                        std::chrono::high_resolution_clock::now() - startTime )
-                                        .count() -
-                                    editor.mOverheadNode.totalGenerateNs );
+            editor.GenerateNodePreviewNoise( genRGB.get(), noiseData );
 
-        std::sort( generateAverages.begin(), generateAverages.end() );
+            generateAverages.push_back( std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                            std::chrono::high_resolution_clock::now() - startTime )
+                                            .count() -
+                                        editor.mOverheadNode.totalGenerateNs );
 
-        totalGenerateNs = generateAverages[generateAverages.size() / 3];
+            std::sort( generateAverages.begin(), generateAverages.end() );
+
+            totalGenerateNs = generateAverages[generateAverages.size() / 3];
+        }
+        else
+        {
+            std::fill( noiseData.begin(), noiseData.end(), 0.0f );
+            serialised.clear();
+            totalGenerateNs = 0;
+        }
+
+        if( benchmark )
+        {
+            return;
+        }
+
+        ImageView2D noiseImage(
+            PixelFormat::RGBA8Unorm, { NoiseSize, NoiseSize },
+            Corrade::Containers::ArrayView<const char>( (const char*)noiseData.begin(), noiseData.nbbytes() ) );
+
+        noiseTexture.setStorage( 1, GL::TextureFormat::RGBA8, noiseImage.size() ).setSubImage( 0, {}, noiseImage );
+        hasTexture = true;
     }
     else
     {
-        std::fill( noiseData.begin(), noiseData.end(), 0.0f );
-        serialised.clear();
-        totalGenerateNs = 0;
+        hasTexture   = false;
+        noiseTexture = GL::Texture2D();
     }
-
-    if( benchmark )
-    {
-        return;
-    }
-
-    ImageView2D noiseImage(
-        PixelFormat::RGBA8Unorm, { NoiseSize, NoiseSize },
-        Corrade::Containers::ArrayView<const char>( (const char*)noiseData.begin(), noiseData.nbbytes() ) );
-
-    noiseTexture.setStorage( 1, GL::TextureFormat::RGBA8, noiseImage.size() ).setSubImage( 0, {}, noiseImage );
 
     for( auto& node: editor.mNodes )
     {
@@ -359,6 +376,7 @@ void FastNoiseNodeEditor::Node::SerialiseIncludingDependancies( ImGuiSettingsHan
 
 void FastNoiseNodeEditor::SetupSettingsHandlers()
 {
+    FastNoise::ImageData::Importer = Import;
     ImGuiSettingsHandler nodeSettings;
     nodeSettings.TypeName   = "NoiseToolNodeData";
     nodeSettings.TypeHash   = ImHashStr( nodeSettings.TypeName );
@@ -550,8 +568,8 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         auto* nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
         outBuf->appendf( "\n[%s][Settings]\n", handler->TypeName );
 
-        for( auto& e: FastNoise::ImageData::ImageTable.items )
-            outBuf->appendf( "image=%d!%s\n", e.second, e.first.sourceName.c_str() );
+        FastNoise::ImageData::forEach(
+            [&]( auto& e ) { outBuf->appendf( "image=%d!%s\n", e.second, e.first.sourceName.c_str() ); } );
     };
     textureSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -575,27 +593,13 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
                 std::from_chars( number.data(), number.data() + number.size(), idx );
                 if( idx >= 0 )
                 {
-                    int last = (int)FastNoise::ImageData::ImageTable.items.size();
-                    FastNoise::ImageData::ImageTable.items.emplace_back( ImportImage( path ), (int)idx );
-                    if( idx >= (int)FastNoise::ImageData::ImageTable.indexes.size() )
-                    {
-                        FastNoise::ImageData::ImageTable.indexes.resize( idx + 1, -1 );
-                    }
-                    FastNoise::ImageData::ImageTable.indexes[idx] = last;
+                    FastNoise::ImageData::emplaceAt( std::move( path ), idx );
                 }
             }
         }
     };
     textureSettings.ApplyAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler ) {
-        auto& indexes = FastNoise::ImageData::ImageTable.indexes;
-        for( size_t i = 0; i < indexes.size(); ++i )
-        {
-            if( indexes[i] == -1 ) // free
-            {
-                indexes[i]                            = FastNoise::ImageData::ImageTable.free;
-                FastNoise::ImageData::ImageTable.free = (int)i;
-            }
-        }
+        FastNoise::ImageData::fixIndexes();
     };
 
     ImGuiSettingsHandler editorSettings;
@@ -611,9 +615,9 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
 
         outBuf->appendf( "frequency=%f\n", nodeEditor->mNodeFrequency );
         outBuf->appendf( "seed=%d\n", nodeEditor->mNodeSeed );
-        outBuf->appendf( "gen_type=%d\n", (int)nodeEditor->mNodeGenType );
         outBuf->appendf( "image_path=%s\n", nodeEditor->mLastImportImagePath.c_str() );
         outBuf->appendf( "texure_preview=%c\n", (char)nodeEditor->mEnableTexPreview );
+        outBuf->appendf( "selected_image=%d\n", nodeEditor->mSelectedImage.index );
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -634,9 +638,8 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
 
         sscanf( line, "frequency=%f", &nodeEditor->mNodeFrequency );
         sscanf( line, "seed=%d", &nodeEditor->mNodeSeed );
-        sscanf( line, "gen_type=%d", (int*)&nodeEditor->mNodeGenType );
         sscanf( line, "texure_preview=%c", (char*)&nodeEditor->mEnableTexPreview );
-
+        sscanf( line, "selected_image=%d\n", &nodeEditor->mSelectedImage.index );
         std::string_view l( line );
         if( l.starts_with( "image_path=" ) )
         {
@@ -758,40 +761,12 @@ FastNoiseNodeEditor::FastNoiseNodeEditor() :
     }
 }
 
-void FastNoiseNodeEditor::DoNodeBenchmarks()
+void FastNoiseNodeEditor::DrawEditor( bool locked )
 {
-    // Benchmark overhead every frame to keep it accurate
-    if( mOverheadNode.generateAverages.size() >= 512 )
-    {
-        std::default_random_engine            engine( (uint32_t)mOverheadNode.totalGenerateNs );
-        std::uniform_int_distribution<size_t> randomInt { 0ul, mOverheadNode.generateAverages.size() - 1 };
-
-        mOverheadNode.generateAverages.erase( mOverheadNode.generateAverages.begin() + randomInt( engine ) );
-    }
-
-    mOverheadNode.GeneratePreview( false, true );
-
-    // 1 node benchmark per frame
-    if( mNodeBenchmarkIndex >= (int32_t)mNodes.size() )
-    {
-        mNodeBenchmarkIndex = 0;
-    }
-
-    for( auto itr = std::next( mNodes.begin(), mNodeBenchmarkIndex ); itr != mNodes.end(); ++itr )
-    {
-        mNodeBenchmarkIndex++;
-        if( !itr->second.serialised.empty() && itr->second.generateAverages.size() < mNodeBenchmarkMax )
-        {
-            itr->second.GeneratePreview( false, true );
-            break;
-        }
-    }
-}
-
-void FastNoiseNodeEditor::DrawEditor()
-{
-    if( ImGui::Begin( "Node Editor", nullptr,
-                      ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar ) )
+    auto mainWndFlags = ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar;
+    if( locked )
+        mainWndFlags |= ImGuiWindowFlags_NoResize;
+    if( ImGui::Begin( "Node Editor", nullptr, mainWndFlags ) )
     {
         auto newSize = ImGui::GetWindowSize();
 
@@ -854,10 +829,6 @@ void FastNoiseNodeEditor::Draw( const Matrix4& transformation, const Matrix4& pr
     //  const ImGuiViewport* viewport = ImGui::GetMainViewport();
     //  ImGui::DockSpaceOverViewport( viewport, ImGuiDockNodeFlags_PassthruCentralNode );
 
-    std::string simdTxt = "Current SIMD Level: ";
-    simdTxt += GetSIMDLevelName( mActualSIMDLevel );
-    ImGui::TextUnformatted( simdTxt.c_str() );
-
     mMeshNoisePreview.Draw( transformation, projection, cameraPosition );
 
     DoImages();
@@ -882,7 +853,7 @@ void FastNoiseNodeEditor::CheckLinks()
             if( !createdFromSnap || !link )
             {
                 link = startNode->data.get();
-                endNode->GeneratePreview( mEnableTexPreview );
+                endNode->GeneratePreview( true );
             }
         }
     }
@@ -921,7 +892,7 @@ void FastNoiseNodeEditor::DeleteNode( FastNoise::NodeData* nodeData )
 
         if( changed )
         {
-            node.second.GeneratePreview( mEnableTexPreview );
+            node.second.GeneratePreview( true );
         }
     }
 }
@@ -966,7 +937,7 @@ void FastNoiseNodeEditor::UpdateSelected()
 
             if( changed )
             {
-                node.second.GeneratePreview( mEnableTexPreview );
+                node.second.GeneratePreview( true );
             }
         }
     }
@@ -1005,11 +976,14 @@ void FastNoiseNodeEditor::DoHistory()
 {
     // if( ImGui::Begin( "History" ) )
     {
-        if( ImGui::BeginTable( "HistoryTable", 2, ImGuiTableFlags_Borders ) )
+
+        ImGui::Text( "Saved Node Groups" );
+        ImGui::Separator();
+        if( ImGui::BeginTable( "HistoryTable", 2, ImGuiTableFlags_SizingFixedFit ) )
         {
-            ImGui::TableSetupColumn( "Name" );
-            ImGui::TableSetupColumn( "Action" );
-            ImGui::TableHeadersRow();
+            ImGui::TableSetupColumn( "", 0, 320 );
+            ImGui::TableSetupColumn( "", 0, 80 );
+
             int id = 0;
             for( auto& e: mHistory )
             {
@@ -1027,7 +1001,7 @@ void FastNoiseNodeEditor::DoHistory()
                 ImGui::PopID();
                 ImGui::SameLine();
                 ImGui::PushID( id++ );
-                if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
+                if( ImGui::Button( ICON_FA_TRASH_CAN ) )
                 {
                     e.first  = "";
                     e.second = "";
@@ -1047,19 +1021,21 @@ void FastNoiseNodeEditor::DoImages()
 {
     // if( ImGui::Begin( "Images", 0, ImGuiWindowFlags_AlwaysUseWindowPadding ) )
     {
-        if( ImGui::BeginTable( "ImageTable", 2, ImGuiTableFlags_Borders ) )
+        ImGui::Text( "Saved Image Paths" );
+        ImGui::Separator();
+        if( ImGui::BeginTable( "ImageTable", 2, ImGuiTableFlags_SizingFixedFit ) )
         {
-            ImGui::TableSetupColumn( "Images" );
-            ImGui::TableSetupColumn( "Action" );
-            ImGui::TableHeadersRow();
-            for( auto& e: FastNoise::ImageData::ImageTable.items )
-            {
+            ImGui::TableSetupColumn( "", 0, 300 );
+            ImGui::TableSetupColumn( "", 0, 100 );
+
+            FastNoise::ImageData::forEach( [&]( auto& e ) {
                 if( e.first.sourceName.empty() )
-                    continue;
+                    return;
                 ImGui::TableNextColumn();
                 bool selected = e.second == mSelectedImage.index;
                 if( ImGui::Selectable( e.first.sourceName.c_str(), &selected,
-                                       ImGuiSelectableFlags_SpanAvailWidth | ImGuiSelectableFlags_SelectOnClick ) )
+                                       ImGuiSelectableFlags_SpanAvailWidth | ImGuiSelectableFlags_SelectOnClick,
+                                       ImVec2( 0, 20 ) ) )
                 {
                     if( selected )
                         mSelectedImage.index = e.second;
@@ -1070,32 +1046,51 @@ void FastNoiseNodeEditor::DoImages()
                     mSelectedImage.index = e.second;
                 ImGui::TableNextColumn();
                 ImGui::PushID( e.second );
-                if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
+                bool loaded = e.first.isLoaded();
+                if( ToggleButton( ICON_FA_DATABASE, loaded, ImVec2( 20, 20 ),
+                                  loaded ? "Click to unload this image." : "Click to load this image from file." ) )
+                {
+                    if( loaded )
+                        e.first.ensure( false );
+                    else
+                        e.first.unload();
+                }
+                ImGui::SameLine();
+                if( Button( ICON_FA_ROTATE_RIGHT, "Reload this image", ImVec2( 20, 20 ) ) )
+                {
+                    e.first.ensure( true );
+                }
+                ImGui::SameLine();
+                if( Button( ICON_FA_TRASH_CAN, "Delete this image", ImVec2( 20, 20 ) ) )
                 {
                     if( mSelectedImage.index == e.second )
                         mSelectedImage.index = -1;
-                    FastNoise::ImageData::ImageTable.Erase( e.second );
+                    FastNoise::ImageData::remove( e.second );
                     ImGuiExtra::MarkSettingsDirty();
                 }
                 ImGui::PopID();
                 ImGui::TableNextRow();
-            }
+            } );
             ImGui::EndTable();
         }
 
 
-        if( ImGui::Button( "Add Image" ) )
+        if( Magnum::Button( ICON_FA_FILE_IMPORT, "Browse for images/masks to add" ) )
             ImGuiFileDialog::Instance()->OpenDialog( "ImageFileDlgKey", "Images", ".png,.hdr,.bmp,.tga,.jpeg,.jpg",
                                                      mLastImportImagePath );
-
+        ImGui::SameLine();
+        if( Magnum::Button( ICON_FA_ARROW_UP_FROM_BRACKET, "Click to unload all images." ) )
+        {
+            FastNoise::ImageData::forEach( [&]( auto& e ) { e.first.unload(); } );
+        }
 
         if( ImGuiFileDialog::Instance()->Display( "ImageFileDlgKey", 32, ImVec2 { 600, 400 } ) )
         {
             if( ImGuiFileDialog::Instance()->IsOk() )
             {
                 mLastImportImagePath = ImGuiFileDialog::Instance()->GetCurrentPath();
-                mSelectedImage.index = FastNoise::ImageData::ImageTable.Emplace(
-                    Magnum::ImportImage( ImGuiFileDialog::Instance()->GetFilePathName() ) );
+                mSelectedImage.index =
+                    FastNoise::ImageData::add( Magnum::ImportImage( ImGuiFileDialog::Instance()->GetFilePathName() ) );
             }
 
             ImGuiFileDialog::Instance()->Close();
@@ -1132,14 +1127,8 @@ void FastNoiseNodeEditor::DoNodes()
         // ImNodes::PushColorStyle( ImNodesCol_TitleBarSelected, ImGui::GetColorU32( style.titleSelected ) );
         ImGui::PushStyleColor( ImGuiCol_Text, style.textColor );
 
-
         ImNodes::BeginNode( node.second.nodeId );
-
         ImNodes::BeginNodeTitleBar();
-        std::string formatName = FastNoise::Metadata::FormatMetadataNodeName( node.second.data->metadata );
-        ImGui::TextUnformatted( formatName.c_str() );
-
-        ImGui::SameLine( Node::NoiseSize - 20 );
 
         bool toggled = mSelectedNode == node.first;
 
@@ -1147,8 +1136,15 @@ void FastNoiseNodeEditor::DoNodes()
         ImGui::PushStyleColor( ImGuiCol_ButtonActive, style.textColor );
 
         if( Magnum::ToggleButton( toggled ? ICON_FA_LOCATION_DOT : ICON_FA_LOCATION_CROSSHAIRS, toggled,
-                                  ImVec2( 20, 20 ), "Preview this node" ) )
+                                  ImVec2( 32, 32 ), "Preview this node" ) &&
+            toggled )
             ChangeSelectedNode( node.first );
+
+
+        ImGui::SameLine();
+
+        std::string formatName = FastNoise::Metadata::FormatMetadataNodeName( node.second.data->metadata );
+        ImGui::TextUnformatted( formatName.c_str() );
 
         ImGui::PopStyleColor();
         ImGui::PopStyleColor();
@@ -1227,7 +1223,7 @@ void FastNoiseNodeEditor::DoNodes()
                     *node.second.data = std::move( newData );
                 }
 
-                node.second.GeneratePreview( mEnableTexPreview );
+                node.second.GeneratePreview( true );
             }
 
             ImGui::EndPopup();
@@ -1267,7 +1263,7 @@ void FastNoiseNodeEditor::DoNodes()
 
             if( ImGui::DragFloat( formatName.c_str(), &nodeData->hybrids[i].second, 0.02f, 0, 0, floatFormat ) )
             {
-                node.second.GeneratePreview( mEnableTexPreview );
+                node.second.GeneratePreview( true );
             }
 
             if( isLinked )
@@ -1297,7 +1293,7 @@ void FastNoiseNodeEditor::DoNodes()
                 if( ImGui::DragFloat( formatName.c_str(), &nodeData->variables[i].f, 0.02f, nodeVar.valueMin.f,
                                       nodeVar.valueMax.f ) )
                 {
-                    node.second.GeneratePreview( mEnableTexPreview );
+                    node.second.GeneratePreview( true );
                 }
             }
             break;
@@ -1305,7 +1301,7 @@ void FastNoiseNodeEditor::DoNodes()
             {
                 if( ImGui::Checkbox( formatName.c_str(), &nodeData->variables[i].b ) )
                 {
-                    node.second.GeneratePreview( mEnableTexPreview );
+                    node.second.GeneratePreview( true );
                 }
             }
             break;
@@ -1314,7 +1310,7 @@ void FastNoiseNodeEditor::DoNodes()
                 if( ImGui::DragInt( formatName.c_str(), &nodeData->variables[i].i, 0.2f, nodeVar.valueMin.i,
                                     nodeVar.valueMax.i ) )
                 {
-                    node.second.GeneratePreview( mEnableTexPreview );
+                    node.second.GeneratePreview( true );
                 }
             }
             break;
@@ -1324,7 +1320,7 @@ void FastNoiseNodeEditor::DoNodes()
                                   (int)nodeVar.enumNames.size() ) ||
                     ImGuiExtra::ScrollCombo( &nodeData->variables[i].i, (int)nodeVar.enumNames.size() ) )
                 {
-                    node.second.GeneratePreview( mEnableTexPreview );
+                    node.second.GeneratePreview( true );
                 }
             }
             break;
@@ -1342,7 +1338,7 @@ void FastNoiseNodeEditor::DoNodes()
             if( ImGui::Button( ICON_FA_IMAGE ) )
             {
                 nodeData->images[i].index = mSelectedImage.index;
-                node.second.GeneratePreview( mEnableTexPreview );
+                node.second.GeneratePreview( true );
             }
             auto const& image = nodeData->images[i].toImage();
             ImGui::SameLine();
@@ -1359,7 +1355,7 @@ void FastNoiseNodeEditor::DoNodes()
             auto&       curve   = nodeData->curves[i];
             if( ImGui::DrawCurveEditor( nodeVar.name, curve ) )
             {
-                node.second.GeneratePreview( mEnableTexPreview );
+                node.second.GeneratePreview( true );
             }
         }
 
@@ -1375,7 +1371,12 @@ void FastNoiseNodeEditor::DoNodes()
         // IM_COL32( 255, 0, 0, 200 ), false );
         //  }
         if( mEnableTexPreview )
+        {
+            if( !node.second.hasTexture )
+                node.second.GeneratePreview( true );
             ImGuiIntegration::image( node.second.noiseTexture, noiseSize );
+        }
+
         ImNodes::EndOutputAttribute();
 
         ImNodes::EndNode();
@@ -1578,7 +1579,7 @@ void FastNoiseNodeEditor::DoContextMenu()
             auto& newNode = AddNode( startPos, newMetadata );
 
             newNode.GetNodeLink( 0 ) = mDroppedLinkNode;
-            newNode.GeneratePreview( mEnableTexPreview );
+            newNode.GeneratePreview( true );
         }
 
         ImGui::EndPopup();
@@ -1611,14 +1612,16 @@ FastNoise::SmartNode<> FastNoiseNodeEditor::GenerateSelectedPreview()
 FastNoise::OutputMinMax FastNoiseNodeEditor::GenerateNodePreviewNoise( FastNoise::Generator* gen,
                                                                        FastNoise::Buffer&    noise )
 {
-    FastNoise::Generator::Context context( noise );
-    switch( mNodeGenType )
-    {
-    case NoiseTexture::GenType_2D:
-        gen->GenUniformGrid2D( context, Node::NoiseSize / -2, Node::NoiseSize / -2, Node::NoiseSize, Node::NoiseSize,
-                               mNodeFrequency, mNodeSeed );
-        break;
-    }
+    FastNoise::GeneratorInput context( noise );
+    context.frequency   = mNodeFrequency;
+    context.seed        = mNodeSeed;
+    context.size[0]     = Node::NoiseSize;
+    context.size[1]     = Node::NoiseSize;
+    context.gridSize[0] = Node::NoiseSize - 1;
+    context.gridSize[1] = Node::NoiseSize - 1;
+    context.start[0]    = Node::NoiseSize / -2;
+    context.start[1]    = Node::NoiseSize / -2;
+    gen->GenUniformGrid2D( context );
 
     return context.minMax;
 }

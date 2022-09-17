@@ -5,10 +5,11 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <execution>
+#include <future>
 #include <string>
 #include <vector>
-
-#include <cstdint>
 
 #include "FastNoise/AllocUtils.h"
 #include "FastNoise/CurveData.h"
@@ -18,6 +19,11 @@
 #if !defined( FASTNOISE_METADATA ) && defined( __INTELLISENSE__ )
 //#define FASTNOISE_METADATA
 #endif
+
+
+static inline constexpr auto Exec = std::execution::par;
+// std::execution::seq;
+// std::execution::par
 
 namespace FastNoise
 {
@@ -172,6 +178,23 @@ namespace FastNoise
         }
     };
 
+    struct GeneratorInput
+    {
+        int   start[DimCount];
+        int   size[DimCount];
+        int   gridSize[DimCount];
+        float frequency;
+        int   seed;
+
+        // Output
+        FastNoise::OutputMinMax minMax;
+        Buffer&                 output;
+
+        GeneratorInput( Buffer& o ) : output( o )
+        {
+        }
+    };
+
     class FASTNOISE_API Generator
     {
     public:
@@ -189,18 +212,6 @@ namespace FastNoise
             Single4D
         };
 
-        struct Context
-        {
-            // External API
-            std::array<int, DimCount> planeId = { 0 };
-            Context( Buffer& out ) : output( out )
-            {
-            }
-            // Output
-            Buffer&                 output;
-            FastNoise::OutputMinMax minMax;
-        };
-
         template<typename T>
         friend struct MetadataT;
 
@@ -209,8 +220,7 @@ namespace FastNoise
         virtual FastSIMD::eLevel GetSIMDLevel() const = 0;
         virtual const Metadata&  GetMetadata() const  = 0;
 
-        virtual void GenUniformGrid2D( Context& out, int xStart, int yStart, int xSize, int ySize, float frequency,
-                                       int seed ) const = 0;
+        virtual void GenUniformGrid2D( GeneratorInput& out ) const = 0;
 
         // called when all member variables have been set
         virtual void ApplyChanges() = 0;

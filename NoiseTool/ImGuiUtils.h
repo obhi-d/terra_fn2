@@ -44,9 +44,11 @@ namespace Magnum
 
         if( ImGui::IsItemHovered() )
         {
+            ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, ImVec2( 4.f, 4.f ) );
             ImGui::BeginTooltip();
             ImGui::TextUnformatted( desc );
             ImGui::EndTooltip();
+            ImGui::PopStyleVar();
 
             ImGui::PushStyleColor( ImGuiCol_Text, ImGui::GetStyleColorVec4( ImGuiCol_ButtonHovered ) );
         }
@@ -65,18 +67,20 @@ namespace Magnum
 
         if( clicked )
             toggle = !toggle;
-        return toggle;
+        return clicked;
     }
 
-    inline bool Button( const char* name, const char* desc )
+    inline bool Button( const char* name, const char* desc, ImVec2 size = { 0, 0 } )
     {
-        bool result = ImGui::Button( name );
+        bool result = ImGui::Button( name, size );
 
         if( ImGui::IsItemHovered() )
         {
+            ImGui::PushStyleVar( ImGuiStyleVar_WindowPadding, ImVec2( 4.f, 4.f ) );
             ImGui::BeginTooltip();
             ImGui::TextUnformatted( desc );
             ImGui::EndTooltip();
+            ImGui::PopStyleVar();
         }
 
         return result;

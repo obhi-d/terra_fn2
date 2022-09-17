@@ -29,7 +29,7 @@ void InitResources() {
 NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     Platform::Application { arguments,
                             Configuration {}
-                                .setTitle( "FastNoise2 NoiseTool" )
+                                .setTitle( "Terra" )
                                 .setSize( Vector2i( 1280, 720 ) )
                                 .setWindowFlags( Configuration::WindowFlag::Resizable |
                                                  Configuration::WindowFlag::Maximized ),
@@ -244,14 +244,13 @@ void NoiseToolApp::drawEvent()
 
         ImGui::SameLine();
 
-        if( Magnum::Button( ICON_FA_CAMERA_RETRO, "Reset camera" ) )
+        if( Magnum::Button( ICON_FA_CAMERA, "Reset camera" ) )
         {
             recomputeCamera();
         }
 
-        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS), Cam: %f, %f",
-                     1000.0 / Double( ImGui::GetIO().Framerate ), Double( ImGui::GetIO().Framerate ), mLookAngle.x(),
-                     mLookAngle.y() );
+        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
+                     Double( ImGui::GetIO().Framerate ) );
     }
 
     mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(),
@@ -300,7 +299,7 @@ void NoiseToolApp::drawEvent()
         ImGui::SetNextWindowPos( ImVec2( 8, 10 ) );
     }
 
-    mNodeEditor.DrawEditor();
+    mNodeEditor.DrawEditor( mExternalNodeEditor );
 
     if( mExternalNodeEditor )
         mNodes.endDraw( *this );
@@ -614,6 +613,7 @@ void NoiseToolApp::mouseMoveEvent( MouseMoveEvent& event )
 
 void NoiseToolApp::textInputEvent( TextInputEvent& event )
 {
+    /*
     if( event.event().text.windowID == mNodes.id() )
     {
         mNodes.textInputEvent( event );
@@ -622,6 +622,7 @@ void NoiseToolApp::textInputEvent( TextInputEvent& event )
 
     if( mImGuiIntegrationContext.handleTextInputEvent( event ) )
         return;
+        */
 }
 
 void NoiseToolApp::UpdatePespectiveProjection()
@@ -670,7 +671,7 @@ void NoiseToolApp::recomputeCamera()
 
     auto d = std::tan( mFOV ) * sx;
     auto y = d / std::sin( (float)Rad( Deg( mCamDefaultLookAtAngle ) ) ) * 0.5;
-    auto z = mNodeEditor.GetMeshGridSize().y() * 0.6;
+    auto z = mNodeEditor.GetMeshGridSize().y() * 0.5;
 
     auto eye       = Vector3( 0, y, z );
     auto origin    = Vector3( 0, 0, 0 );

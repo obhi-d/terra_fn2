@@ -314,7 +314,7 @@ namespace FastNoise
 #endif
 
 
-    class RandomConstant : public virtual Generator
+    class GridRandomConstant : public virtual Generator
     {
 
     public:
@@ -350,14 +350,14 @@ namespace FastNoise
 
 #ifdef FASTNOISE_METADATA
     template<>
-    struct MetadataT<RandomConstant> : MetadataT<Generator>
+    struct MetadataT<GridRandomConstant> : MetadataT<Generator>
     {
         MetadataT()
         {
             groups.push_back( "Basic Generators" );
-            this->AddVariable( "SeedOffset", 0, &RandomConstant::SetSeedOffset );
-            this->AddVariable( "Min", -1.0f, &RandomConstant::SetMin );
-            this->AddVariable( "Max", 1.0f, &RandomConstant::SetMax );
+            this->AddVariable( "SeedOffset", 0, &GridRandomConstant::SetSeedOffset );
+            this->AddVariable( "Min", -1.0f, &GridRandomConstant::SetMin );
+            this->AddVariable( "Max", 1.0f, &GridRandomConstant::SetMax );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;

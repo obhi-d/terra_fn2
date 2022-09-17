@@ -662,13 +662,15 @@ namespace FastNoise
 
     enum class FalloffType
     {
-        ePerPlane,
-        ePlaneEdge
+        eLinear,
+        eRadial,
+        eLog,
     };
 
     constexpr static const char* kFalloffType[] = {
-        "Per Plane",
-        "Plane Edge",
+        "Linear",
+        "Radial",
+        "Log",
     };
 
     class EdgeFalloff : public virtual Generator
@@ -697,11 +699,29 @@ namespace FastNoise
             mFalloff = val;
         }
 
+        void SetEdgeClamp( float val )
+        {
+            mEdgeClamp = val;
+        }
+
+        void SetInverted( bool val )
+        {
+            mInvert = val;
+        }
+
+        void SetScale( float val )
+        {
+            mScale = val;
+        }
+
     protected:
         GeneratorSource mSource;
         float           mFalloff   = {};
         float           mEdgeLevel = 0.0f;
-        FalloffType     mType      = FalloffType::ePerPlane;
+        float           mEdgeClamp = 0.0f;
+        float           mScale     = 0.0f;
+        bool            mInvert    = false;
+        FalloffType     mType      = FalloffType::eLinear;
         template<typename T>
         friend struct MetadataT;
     };
@@ -715,10 +735,12 @@ namespace FastNoise
         {
             groups.push_back( "Modifiers" );
             this->AddGeneratorSource( "Source", &EdgeFalloff::SetSource );
-            this->AddVariableEnum( "Fallloff Type", FalloffType::ePerPlane, &EdgeFalloff::SetFalloffType,
-                                   kFalloffType );
+            this->AddVariableEnum( "Fallloff Type", FalloffType::eLinear, &EdgeFalloff::SetFalloffType, kFalloffType );
             this->AddVariable( "Falloff", 1.0f, &EdgeFalloff::SetFalloff );
             this->AddVariable( "EdgeLevel", 0.0f, &EdgeFalloff::SetEdgeLevel );
+            this->AddVariable( "EdgeClamp", 0.0f, &EdgeFalloff::SetEdgeClamp );
+            this->AddVariable( "Scale", 0.0f, &EdgeFalloff::SetScale );
+            this->AddVariable( "Invert", false, &EdgeFalloff::SetInverted );
         }
 
         SmartNode<> CreateNode( FastSIMD::eLevel ) const override;

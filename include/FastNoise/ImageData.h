@@ -6,6 +6,7 @@
 #include <limits>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "FastNoise/AllocUtils.h"
@@ -18,9 +19,56 @@ namespace FastNoise
 
     class FASTNOISE_API ImageData
     {
-    public:
         static Table<ImageData> ImageTable;
 
+    public:
+        static std::function<void( ImageData& )> Importer;
+
+        ImageData() = default;
+        ImageData( std::string path ) : sourceName( std::move( path ) )
+        {
+        }
+
+        static void emplaceAt( std::string_view path, int idx )
+        {
+            int last = (int)FastNoise::ImageData::ImageTable.items.size();
+            FastNoise::ImageData::ImageTable.items.emplace_back( ImageData( std::string( path ) ), idx );
+            if( idx >= (int)FastNoise::ImageData::ImageTable.indexes.size() )
+            {
+                FastNoise::ImageData::ImageTable.indexes.resize( idx + 1, -1 );
+            }
+            FastNoise::ImageData::ImageTable.indexes[idx] = last;
+        }
+
+        static void fixIndexes()
+        {
+            auto& indexes = FastNoise::ImageData::ImageTable.indexes;
+            for( size_t i = 0; i < indexes.size(); ++i )
+            {
+                if( indexes[i] == -1 ) // free
+                {
+                    indexes[i]                            = FastNoise::ImageData::ImageTable.free;
+                    FastNoise::ImageData::ImageTable.free = (int)i;
+                }
+            }
+        }
+
+        template<typename T>
+        static void forEach( T&& lambda )
+        {
+            for( auto& item: ImageTable.items )
+                lambda( item );
+        }
+
+        static auto add( ImageData&& item )
+        {
+            return ImageTable.Emplace( std::move( item ) );
+        }
+
+        static auto remove( int32_t item )
+        {
+            return ImageTable.Erase( item );
+        }
 
         struct View
         {
@@ -28,7 +76,9 @@ namespace FastNoise
 
             ImageData const& toImage()
             {
-                return ImageTable.At( index );
+                auto& data = ImageTable.At( index );
+                data.ensure( false );
+                return data;
             }
 
             bool operator==( View const& other ) const noexcept
@@ -70,7 +120,19 @@ namespace FastNoise
         std::uint32_t                 pixelWidth = 4;
         Format                        format     = Format::ERGBA;
 
-
+        inline bool isLoaded() const
+        {
+            return data != nullptr;
+        }
+        inline void unload()
+        {
+            data = nullptr;
+        }
+        inline void ensure( bool force )
+        {
+            if( !data || force )
+                Importer( *this );
+        }
         inline bool fromFile()
         {
             std::filesystem::path imgPath = sourceName + ".raw";
@@ -98,7 +160,8 @@ namespace FastNoise
             auto siz = width * height * depth * pixelWidth;
             if( !siz )
                 return false;
-            data = std::shared_ptr<std::uint8_t>( (std::uint8_t*)AlignedAllocate( 32, siz * 4 ), AlignedByteDeleter {} );
+            data =
+                std::shared_ptr<std::uint8_t>( (std::uint8_t*)AlignedAllocate( 32, siz * 4 ), AlignedByteDeleter {} );
             return true;
         }
 
@@ -129,7 +192,8 @@ namespace FastNoise
             return *(T const*)( data.get() + ( ( j * width + i ) * pixelWidth ) );
         }
 
-        float sample( float u, float v ) const
+
+        inline float sample( float u, float v ) const
         {
             auto x = std::max<int>( 0, std::min<int>( (int)( u * ( (float)width - 0.5f ) ), width - 1 ) );
             auto y = std::max<int>( 0, std::min<int>( (int)( v * ( (float)height - 0.5f ) ), height - 1 ) );
@@ -147,16 +211,18 @@ namespace FastNoise
             }
             case Format::ERGBA:
             case Format::EUInt:
-                return (float)( (double)get<std::uint32_t>( x, y ) / (double)std::numeric_limits<std::uint32_t>::max() );
+                return (float)( (double)get<std::uint32_t>( x, y ) /
+                                (double)std::numeric_limits<std::uint32_t>::max() );
             case Format::EUInt16:
-                return (float)( (double)get<std::uint32_t>( x, y ) / (double)std::numeric_limits<std::uint16_t>::max() );
+                return (float)( (double)get<std::uint16_t>( x, y ) /
+                                (double)std::numeric_limits<std::uint16_t>::max() );
             case Format::EFloat:
                 return get<float>( x, y );
             }
         }
 
         template<int N>
-        float sampleNx( float u, float v ) const
+        inline float sampleNx( float u, float v ) const
         {
             auto            cx    = (int)( u * ( (float)width - 0.5f ) );
             auto            cy    = (int)( v * ( (float)height - 0.5f ) );
@@ -184,7 +250,12 @@ namespace FastNoise
                     break;
                     case Format::ERGBA:
                     case Format::EUInt:
-                        value += (float)( (double)get<std::uint32_t>( x, y ) / (double)std::numeric_limits<std::uint32_t>::max() );
+                        value += (float)( (double)get<std::uint32_t>( x, y ) /
+                                          (double)std::numeric_limits<std::uint32_t>::max() );
+                        break;
+                    case Format::EUInt16:
+                        value += (float)( (double)get<std::uint16_t>( x, y ) /
+                                          (double)std::numeric_limits<std::uint16_t>::max() );
                         break;
                     case Format::EFloat:
                         value += get<float>( x, y );

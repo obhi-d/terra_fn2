@@ -38,11 +38,16 @@ namespace Magnum
     public:
         FastNoiseNodeEditor();
         void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition );
-        void DrawEditor();
+        void DrawEditor( bool locked );
         void DrawTexture();
         void SetSIMDLevel( FastSIMD::eLevel lvl );
         void AddHistoryRecord();
         void UpdateSelected();
+
+        bool IsTexturePreviewEnabled() const
+        {
+            return mEnableTexPreview;
+        }
 
         static const char* GetSIMDLevelName( FastSIMD::eLevel lvl );
 
@@ -77,7 +82,8 @@ namespace Magnum
             {
             }
 
-            void                              GeneratePreview( bool nodeTreeChanged = true, bool benchmark = false );
+            void GeneratePreview( bool nodeTreeChanged, bool benchmark = false );
+
             std::vector<FastNoise::NodeData*> GetNodeIDLinks();
             uint64_t                          GetLocalGenerateNs();
             FastNoise::NodeData*&             GetNodeLink( int attributeId );
@@ -113,6 +119,8 @@ namespace Magnum
 
             static const int NoiseSize = 224;
             GL::Texture2D    noiseTexture;
+
+            bool hasTexture = false;
         };
 
         struct MetadataMenu
@@ -169,7 +177,6 @@ namespace Magnum
         int                     GetFreeNodeId();
         void                    ChangeSelectedNode( FastNoise::NodeData* newId );
         void                    DeleteNode( FastNoise::NodeData* nodeData );
-        void                    DoNodeBenchmarks();
         void                    SetupSettingsHandlers();
 
         void CheckLinks();
@@ -201,9 +208,8 @@ namespace Magnum
         int32_t              mNodeBenchmarkIndex = 0;
         int32_t              mNodeBenchmarkMax   = 128;
 
-        float                 mNodeFrequency = 0.02f;
-        int                   mNodeSeed      = 1337;
-        NoiseTexture::GenType mNodeGenType   = NoiseTexture::GenType_2D;
+        float mNodeFrequency = 0.02f;
+        int   mNodeSeed      = 1337;
 
         FastSIMD::eLevel mMaxSIMDLevel    = FastSIMD::Level_Null;
         FastSIMD::eLevel mActualSIMDLevel = FastSIMD::Level_Null;

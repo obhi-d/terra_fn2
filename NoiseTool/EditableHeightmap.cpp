@@ -1,6 +1,7 @@
 #include "EditableHieghtmap.h"
 #include "IconsFontAwesome6.h"
 #include "ImGuiExtra.h"
+#include "ImGuiUtils.h"
 #include "Utils.h"
 
 namespace Magnum
@@ -16,49 +17,57 @@ namespace Magnum
     void EditableHeightmap::ResetOffsets()
     {
         auto oldOffset = offset;
-        offset.x()     = -heightmapSize.x() / 2;
-        offset.y()     = -heightmapSize.y() / 2;
-        if( offset != heightmapSize )
+        auto mapSize   = GetMapSize();
+        offset.x()     = -mapSize.x() / 2;
+        offset.y()     = -mapSize.y() / 2;
+        if( offset != oldOffset )
             edited = true;
     }
 
     void EditableHeightmap::RegenreateGrid()
     {
-        auto  data    = std::vector<Vector2>( ( heightmapSize.y() + 1 ) * ( heightmapSize.x() + 1 ) );
-        auto  indices = std::vector<uint32_t>( heightmapSize.y() * heightmapSize.x() * 6 );
-        int   sy      = heightmapSize.y();
-        int   sx      = heightmapSize.x();
-        float startY  = -( (float)sy ) * 0.5f;
-        float startX  = -( (float)sx ) * 0.5f;
+        auto     mapSize = GetMapSize();
+        uint32_t VCount  = ( mapSize.y() + 1 ) * ( mapSize.x() + 1 );
+        uint32_t ICount  = ( mapSize.y() ) * ( mapSize.x() );
+        auto     data    = std::vector<Vector2>( VCount );
+        auto     indices = std::vector<uint32_t>( ICount * 6 );
+        int      sy      = mapSize.y();
+        int      sx      = mapSize.x();
+        float    startY  = -( (float)sy ) * 0.5f;
+        float    startX  = -( (float)sx ) * 0.5f;
 
-        for( int y = 0; y <= heightmapSize.y(); ++y )
+
+        for( int y = 0; y <= mapSize.y(); ++y )
         {
-            for( int x = 0; x <= heightmapSize.x(); ++x )
+            for( int x = 0; x <= mapSize.x(); ++x )
             {
-                auto vertexId  = (size_t)( y * ( heightmapSize.x() + 1 ) + x );
+                auto vertexId  = (size_t)( y * ( mapSize.x() + 1 ) + x );
                 data[vertexId] = Vector2( x + startX, y + startY );
             }
         }
-
-        for( int y = 0; y < heightmapSize.y(); ++y )
+        for( int y = 0; y < mapSize.y(); ++y )
         {
-            for( int x = 0; x < heightmapSize.x(); ++x )
+            for( int x = 0; x < mapSize.x(); ++x )
             {
-                auto patchId         = ( y * heightmapSize.x() + x ) * 6;
-                auto vertId          = ( y * ( heightmapSize.x() + 1 ) + x );
+                auto patchId = int( y * mapSize.x() + x ) * 6;
+                auto vertId  = int( y * ( mapSize.x() + 1 ) + x );
+
                 indices[patchId + 0] = vertId;
+                indices[patchId + 1] = vertId + mapSize.x() + 1;
                 indices[patchId + 2] = vertId + 1;
-                indices[patchId + 1] = vertId + heightmapSize.x() + 1;
+
                 indices[patchId + 3] = vertId + 1;
-                indices[patchId + 5] = vertId + heightmapSize.x() + 2;
-                indices[patchId + 4] = vertId + heightmapSize.x() + 1;
+                indices[patchId + 4] = vertId + mapSize.x() + 1;
+                indices[patchId + 5] = vertId + mapSize.x() + 2;
             }
         }
 
-        heights.resize( 32, (size_t)( heightmapSize.y() + 1 ) * (size_t)( heightmapSize.x() + 1 ) );
+
+        heights.resize( 32, VCount );
+
         xyBuffer = GL::Buffer( GL::Buffer::TargetHint::Array, Containers::ArrayView<Vector2>( data ) );
         heightBuffer =
-            GL::Buffer( GL::Buffer::TargetHint::Array, Containers::ArrayView<float>( heights.begin(), heights.size ),
+            GL::Buffer( GL::Buffer::TargetHint::Array, Containers::ArrayView<float>( heights.begin(), VCount ),
                         GL::BufferUsage::DynamicDraw );
         indexBuffer = GL::Buffer( GL::Buffer::TargetHint::Array, Containers::ArrayView<uint32_t>( indices ) );
         mesh        = std::make_unique<GL::Mesh>( GL::MeshPrimitive::Triangles );
@@ -74,19 +83,32 @@ namespace Magnum
     {
         if( !generator )
             return;
-        int sx = heightmapSize.x() + 1;
-        int sy = heightmapSize.y() + 1;
+        auto     mapSize = GetMapSize();
+        int      sy      = mapSize.y();
+        int      sx      = mapSize.x();
+        uint32_t VCount  = ( mapSize.y() + 1 ) * ( mapSize.x() + 1 );
 
-        float startX = -( (float)heightmapSize.x() ) * 0.5f + offset.x();
-        float startY = -( (float)heightmapSize.y() ) * 0.5f + offset.y();
+        FastNoise::GeneratorInput ctx( heights );
 
-        auto size = (size_t)( heightmapSize.y() + 1 ) * (size_t)( heightmapSize.x() + 1 );
+        float startY = -( (float)sy ) * 0.5f + offset.x();
+        float startX = -( (float)sx ) * 0.5f + offset.y();
 
-        FastNoise::Generator::Context ctx( heights );
+        ctx.start[0]    = (int)startX;
+        ctx.start[1]    = (int)startY;
+        ctx.size[0]     = ( sx + 1 );
+        ctx.size[1]     = ( sy + 1 );
+        ctx.seed        = seed;
+        ctx.frequency   = frequency;
+        ctx.gridSize[0] = gridSize.x();
+        ctx.gridSize[1] = gridSize.y();
 
-        generator->GenUniformGrid2D( ctx, startX, startY, sx, sy, frequency, seed );
-        heightBuffer.setData( Containers::ArrayView<float>( heights.begin(), size ), GL::BufferUsage::DynamicDraw );
+        generator->GenUniformGrid2D( ctx );
+
+        heightBuffer.setSubData( 0, Containers::ArrayView<float>( heights.begin(), VCount ) );
+
         heightsDirty = false;
+
+        minMax = ctx.minMax;
     }
 
     void EditableHeightmap::Draw( const Matrix4& transformation, const Matrix4& projection,
@@ -105,9 +127,9 @@ namespace Magnum
 
         edited |= ImGui::DragInt( "Seed", &seed );
         edited |= ImGui::DragFloat( "Frequency", &frequency, 0.0005f, 0, 0, "%.4f" );
+        edited |= ImGui::DragInt2( "Grid Count", gridCount.data(), 1, 1, 20 );
+        edited |= ImGui::DragInt2( "Grid Size", gridSize.data(), 1, 2, std::numeric_limits<int>::max() );
         edited |= ImGui::DragInt2( "Offset", offset.data() );
-
-        edited |= ImGui::DragInt2( "Size", heightmapSize.data(), 1, 2, std::numeric_limits<int>::max() );
 
         if( ImGui::DragFloat( "Heightmap Multiplier", &heightMultiplier, 0.5f ) || firstDraw )
         {
@@ -178,7 +200,7 @@ namespace Magnum
             }
             ImGui::SetNextItemWidth( 20 );
             ImGui::PushID( colorIndex++ );
-            if( ImGui::Button( ICON_FA_DELETE_LEFT ) )
+            if( ImGui::Button( ICON_FA_TRASH_CAN ) )
             {
                 textureChanged = true;
                 active         = false;
@@ -186,7 +208,7 @@ namespace Magnum
             ImGui::PopID();
         }
 
-        if( ImGui::Button( ICON_FA_PLUS " Add Color Layer (Alpha is height)" ) )
+        if( Button( ICON_FA_LAYER_GROUP, "Add color layer to sample from (x,y,z) (alpha is limiting height)" ) )
         {
             if( strataColorPerHeight.empty() )
                 strataColorPerHeight.emplace_back( Color4( 0.2f, 0.2f, 0.2f, 0.0f ), true );
@@ -224,7 +246,8 @@ namespace Magnum
             UpdateHeights();
         }
 
-        ImGui::Text( "Camera Pos: %0.1f, %0.1f, %0.1f", cameraPosition.x(), cameraPosition.y(), cameraPosition.z() );
+        ImGui::Text( "MinMax: %0.1f, %0.1f Camera Pos: %0.1f, %0.1f, %0.1f", minMax.min, minMax.max, cameraPosition.x(),
+                     cameraPosition.y(), cameraPosition.z() );
 
         shader.draw( *mesh );
         firstDraw = false;
@@ -361,7 +384,8 @@ namespace Magnum
             outBuf->appendf( "seed=%d\n", _->seed );
             outBuf->appendf( "color=%d\n", (int)_->sunColor.toSrgbInt() );
             outBuf->appendf( "offset=%d:%d\n", _->offset.x(), _->offset.y() );
-            outBuf->appendf( "size=%d:%d\n", _->heightmapSize[0], _->heightmapSize[1] );
+            outBuf->appendf( "grid_size=%d:%d\n", _->gridSize[0], _->gridSize[1] );
+            outBuf->appendf( "grid_count=%d:%d\n", _->gridCount[0], _->gridCount[1] );
             outBuf->appendf( "sun_rotation=%f:%f\n", _->sunRotation.theta, _->sunRotation.phi );
             outBuf->appendf( "draw_style=%d\n", _->compressPrec );
             outBuf->appendf( "sun_intensity=%f\n", _->sunIntensity );
@@ -390,7 +414,8 @@ namespace Magnum
             sscanf( line, "heightmap_multiplier=%f", &_->heightMultiplier );
             sscanf( line, "seed=%d", &_->seed );
             sscanf( line, "offset=%d:%d", &_->offset.x(), &_->offset.y() );
-            sscanf( line, "size=%d:%d", &_->heightmapSize[0], &_->heightmapSize[1] );
+            sscanf( line, "grid_size=%d:%d", &_->gridSize[0], &_->gridSize[1] );
+            sscanf( line, "grid_count=%d:%d", &_->gridCount[0], &_->gridCount[1] );
             sscanf( line, "sun_rotation=%f:%f", &_->sunRotation.theta, &_->sunRotation.phi );
             sscanf( line, "draw_style=%d", &_->compressPrec );
             sscanf( line, "sun_intensity=%f", &_->sunIntensity );

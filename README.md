@@ -1,12 +1,11 @@
 
-# FastNoise2 
+# Terra 
 
 This is a fork to the amazing FastNoise2 library 
 
 [Original Readme](OriginalREADME.md)
 
-The fork is focused on the NoiseTool rather than the actual library.
-It compiles with C++20 (only tested on Windows).
+The fork is focused on the Terra, a heightmap generator, rather than the actual library.
 
 
 # Exclusive Features 
@@ -24,4 +23,6 @@ It compiles with C++20 (only tested on Windows).
 - [x] Random scale/rotate generator (per plane)
 - [ ] Node grouping into meta groups
 - [x] Add camera re-focus button
+- [ ] Fix typing speed bug in tool window
+- [ ] Fix random constant gen bug
 ![NoiseTool](example/snapshot.png)

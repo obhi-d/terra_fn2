@@ -448,31 +448,67 @@ class FS_T<FastNoise::EdgeFalloff, FS> : public virtual FastNoise::EdgeFalloff, 
     FASTSIMD_DECLARE_FS_TYPES;
     FASTNOISE_IMPL_GEN_T;
 
+    template<FastNoise::FalloffType FalloffType, typename Input>
+    FS_INLINE void GenBlockDT( Params const& params, Uniform const& u, Input& i, Output& o ) const
+    {
+        constexpr auto N = Input::N;
+
+
+        //...
+        auto edgeLvl = float32v( mEdgeLevel );
+        this->GetSourceValue( mSource, params, u, i, o );
+        auto BlockSize = i.MaxVectorsInBlock();
+        auto power     = float32v( mFalloff );
+        auto clamp     = float32v( mEdgeClamp );
+        for( std::uint32_t b = 0; b < BlockSize; ++b )
+        {
+            float32v dist;
+            auto     uv = i.UV( b, u );
+            auto     u  = FS_Abs_f32( uv[0] - float32v( 0.5f ) ) - clamp;
+            auto     v  = FS_Abs_f32( uv[1] - float32v( 0.5f ) ) - clamp;
+
+            if constexpr( FalloffType == FastNoise::FalloffType::eLinear )
+            {
+                float32v sum = FS_Pow_f32( float32v( 2.0f ) * u + float32v( 0.01f ), power ) +
+                    FS_Pow_f32( float32v( 2.0f ) * v + float32v( 0.01f ), power );
+                dist = FS_Sqrt_f32( sum );
+            }
+            else if constexpr( FalloffType == FastNoise::FalloffType::eRadial )
+            {
+                auto sum = u * u + v * v;
+                dist     = FS_Pow_f32( FS_Sqrt_f32( sum ), power );
+            }
+            else if constexpr( FalloffType == FastNoise::FalloffType::eLog )
+            {
+                auto sum = u * u + v * v;
+                dist     = FS_Log_f32( sum * power );
+            }
+
+            if( mInvert )
+                dist = float32v( mScale ) / dist;
+            else
+                dist = float32v( mScale ) * dist;
+            auto value = o.output[b];
+            value -= edgeLvl;
+
+            auto mask   = dist < float32v( 1.0f );
+            dist        = dist * dist * ( float32v( 3.0f ) - ( float32v( 2.0f ) * dist ) );
+            value       = ( value - value * dist ) + edgeLvl;
+            o.output[b] = FS_Select_f32( mask, value, edgeLvl );
+        }
+
+
+        // u.ctx.
+    }
     template<typename Input>
     FS_INLINE void GenBlockT( Params const& params, Uniform const& u, Input& i, Output& o ) const
     {
-        constexpr auto N = Input::N;
-        if( mType == FastNoise::FalloffType::ePlaneEdge )
-        {
-            //...
-        }
-        else
-        {
-            auto edgeLvl = float32v( mEdgeLevel );
-            this->GetSourceValue( mSource, params, u, i, o );
-            auto BlockSize = i.MaxVectorsInBlock();
-            for( std::uint32_t b = 0; b < BlockSize; ++b )
-            {
-                auto dist  = FS_Pow_f32( i.RadialDistance( b, u ), float32v( mFalloff ) );
-                auto value = o.output[b];
-                value -= edgeLvl;
-                auto mask   = dist < float32v( 1.0f );
-                dist        = dist * dist * ( float32v( 3.0f ) - ( float32v( 2.0f ) * dist ) );
-                value       = ( value - value * dist ) + edgeLvl;
-                o.output[b] = value;
-            }
-        }
-        // u.ctx.
+        if( mType == FastNoise::FalloffType::eLinear )
+            GenBlockDT<FastNoise::FalloffType::eLinear>( params, u, i, o );
+        else if( mType == FastNoise::FalloffType::eLog )
+            GenBlockDT<FastNoise::FalloffType::eLog>( params, u, i, o );
+        else if( mType == FastNoise::FalloffType::eRadial )
+            GenBlockDT<FastNoise::FalloffType::eRadial>( params, u, i, o );
     }
 };
 

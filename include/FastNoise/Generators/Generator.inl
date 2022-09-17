@@ -16,7 +16,6 @@
 #pragma warning( disable : 4250 )
 #endif
 
-static inline constexpr bool NoMultiThread = false;
 
 template<typename FS>
 class FS_T<FastNoise::Generator, FS> : public virtual FastNoise::Generator
@@ -29,21 +28,30 @@ public:
     using DimInt                                   = std::array<int, FastNoise::DimCount>;
     using DimFloat                                 = std::array<float, FastNoise::DimCount>;
     static constexpr std::uint32_t VectorsPerBlock = 64;
-
+    using GeneratorInput                           = FastNoise::GeneratorInput;
 
     struct Uniform
     {
-        DimFloat       offset     = {};
-        DimFloat       size       = {};
-        DimFloat       center     = {};
-        DimFloat       recipSize  = {};
-        DimInt         startCoord = {};
-        float          freq       = {};
-        int            seed       = 0;
-        Context const& ctx;
+        float32v wavelength;
+        float32v vrecipSize[FastNoise::DimCount];
+        float32v vhalfRecipGridSize[FastNoise::DimCount];
+        float32v vrecipGridSize[FastNoise::DimCount];
+
+        DimFloat offset            = {};
+        DimFloat size              = {};
+        DimFloat center            = {};
+        DimFloat gridSize          = {};
+        DimFloat recipSize         = {};
+        DimFloat recipGridSize     = {};
+        DimFloat halfRecipGridSize = {};
+        DimInt   startCoord        = {};
+
+        float                 freq = {};
+        int                   seed = 0;
+        GeneratorInput const& ctx;
 
         Uniform( Uniform const& ) = default;
-        Uniform( Context const& vctx ) : ctx( vctx )
+        Uniform( GeneratorInput const& vctx ) : ctx( vctx )
         {
         }
 
@@ -51,9 +59,17 @@ public:
         {
             for( uint i = 0; i < N; ++i )
             {
-                recipSize[i] = 1.0f / size[i];
-                center[i]    = offset[i] + ( size[i] * 0.5f );
+                recipSize[i]          = 1.0f / size[i];
+                halfRecipGridSize[i]  = 0.5f * recipSize[i];
+                recipGridSize[i]      = 1.0f / gridSize[i];
+                center[i]             = offset[i] + ( size[i] * 0.5f );
+                vrecipSize[i]         = float32v( recipSize[i] );
+                vhalfRecipGridSize[i] = float32v( halfRecipGridSize[i] );
+                vrecipGridSize[i]     = float32v( recipGridSize[i] );
             }
+
+
+            wavelength = float32v( 1 / freq );
         }
     };
 
@@ -67,6 +83,7 @@ public:
     {
         // MinMax
         using DimVec   = std::array<float32v, DimSize>;
+        using DimIVec  = std::array<int32v, DimSize>;
         using BlockVec = std::array<DimVec, VectorsPerBlock>;
 
         static constexpr auto N = DimSize;
@@ -79,35 +96,57 @@ public:
         {
         }
 
-        DimVec UV( uint b, Uniform const& u ) const
+        DimVec GridId( uint b, Uniform const& u )
         {
             DimVec uv;
             for( uint i = 0; i < N; ++i )
-                uv[i] = ( v[b][i] - float32v( u.offset[i] ) ) * float32v( u.recipSize[i] );
+                uv[i] = FS_Ceil_f32( ( v[b][i] ) * u.vrecipGridSize[i] + float32v( 0.5f ) );
             return uv;
         }
 
-        DimVec Diff( uint b, Uniform const& u ) const
+        // Un modded
+        DimVec UV( uint b, Uniform const& u ) const
         {
-            DimVec d;
-            for( uint i = 0; i < N; ++i )
-            {
-                d[i] = FS_Abs_f32( float32v( u.center[i] ) - v[b][i] ) * float32v( 0.5f );
-            }
-            return d;
+            DimVec uv;
+            uv[0] = ( v[b][0] ) * u.vrecipGridSize[0] + float32v( 0.5f );
+            uv[0] = FS_Abs_f32( FS_Select_f32( uv[0] > float32v( 0.0f ), FS_Floor_f32( uv[0] ) - uv[0],
+                                               uv[0] - FS_Ceil_f32( uv[0] ) ) );
+
+            uv[1] = ( v[b][1] ) * u.vrecipGridSize[1] + float32v( 0.5f );
+            uv[1] = FS_Abs_f32( FS_Select_f32( uv[1] > float32v( 0.0f ), FS_Floor_f32( uv[1] ) - uv[1],
+                                               uv[1] - FS_Ceil_f32( uv[1] ) ) );
+
+            return uv;
         }
 
-        float32v RadialDistance( uint b, Uniform const& u ) const
+
+        float32v SquareDistance( uint b, Uniform const& u ) const
         {
+            auto uv = UV( b, u );
+
             float32v sum = float32v( 0.0f );
             DimVec   d;
             for( uint i = 0; i < N; ++i )
             {
-                d[i] = ( float32v( u.center[i] ) - v[b][i] ) * float32v( u.recipSize[i] );
-                d[i] = d[i] * d[i];
+                d[i] = uv[i] - float32v( 0.5f );
+                d[i] = float32v( 2.0f ) * d[i] * d[i];
                 sum += d[i];
             }
-            return FS_Sqrt_f32( sum );
+            return sum;
+        }
+
+        float32v LinearDistance( uint b, Uniform const& u ) const
+        {
+            auto uv = UV( b, u );
+
+            float32v sum = float32v( 0.0f );
+            DimVec   d;
+            for( uint i = 0; i < N; ++i )
+            {
+                d[i] = uv[i] - float32v( 0.5f );
+                sum += FS_Abs_f32( d[i] );
+            }
+            return ( sum );
         }
 
         void Multiply( float32v scale )
@@ -209,10 +248,6 @@ public:
     {
     }
 
-    // Called with min/max computed
-    virtual void Finalize( Context& ) const
-    {
-    }
 
 #define FASTNOISE_DECL_GEN_T( N )                                                                                      \
     virtual void FS_VECTORCALL GenBlock( Params const&, Uniform const&, BlockInput<N>&, Output& ) const = 0
@@ -292,12 +327,12 @@ public:
     }
 
     template<std::uint32_t DimSize>
-    void GenUniformGrid( Context& context, DimInt start, DimInt size, float frequency, int seed ) const
+    void GenUniformGrid( GeneratorInput& gi ) const
     {
         /// ==============================
         using BlockTy = BlockInput<DimSize>;
 
-        float32v freqV( frequency );
+        float32v freqV( gi.frequency );
 
         int32v Idx[DimSize];
         int32v Max[DimSize];
@@ -305,24 +340,25 @@ public:
 
         size_t totalValues = 1;
 
-        auto uniform = Uniform( context );
+        auto uniform = Uniform( gi );
 
-        uniform.freq = (float)frequency;
-        uniform.seed = seed;
+        uniform.freq = (float)gi.frequency;
+        uniform.seed = gi.seed;
 
         Params params;
-        params.seed = int32v( seed );
+        params.seed = int32v( gi.seed );
 
         for( std::uint32_t i = 0; i < DimSize; ++i )
         {
-            totalValues *= size[i];
-            Idx[i]  = int32v( start[i] );
-            Size[i] = int32v( size[i] );
+            totalValues *= gi.size[i];
+            Idx[i]  = int32v( gi.start[i] );
+            Size[i] = int32v( gi.size[i] );
             Max[i]  = Size[i] + Idx[i] + int32v( -1 );
 
-            uniform.startCoord[i] = size[i];
-            uniform.offset[i]     = (float)( start[i] ) * frequency;
-            uniform.size[i]       = (float)( size[i] - 1 ) * frequency;
+            uniform.startCoord[i] = gi.start[i];
+            uniform.offset[i]     = (float)( gi.start[i] ) * gi.frequency;
+            uniform.size[i]       = (float)( gi.size[i] - 1 ) * gi.frequency;
+            uniform.gridSize[i]   = (float)( gi.gridSize[i] ) * gi.frequency;
         }
 
         uniform.ComputeDerived( DimSize );
@@ -333,7 +369,7 @@ public:
             size_t mulSize = 1;
             for( std::uint32_t i = 0; i < DimSize - 1; ++i )
             {
-                mulSize *= size[i];
+                mulSize *= gi.size[i];
                 AxisReset<true>( Idx[i], Idx[i + 1], Max[i], Size[i], mulSize );
             }
         }
@@ -343,14 +379,14 @@ public:
         size_t index      = 0;
 
         auto blocks = std::vector<std::pair<BlockTy, Output>>( blockCount );
-        context.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
+        gi.output.resize( alignof( float32v ), blockCount * ModulatedVectorsPerBlock );
 
         for( size_t b = 0; b < blockCount; ++b )
         {
             auto& block    = blocks[b];
             auto& input    = block.first;
             auto& output   = block.second;
-            output.output  = (float32v*)( context.output.data.get() + b * ModulatedVectorsPerBlock );
+            output.output  = (float32v*)( gi.output.data.get() + b * ModulatedVectorsPerBlock );
             input.nbValues = 0;
             uint vertBlock = 0;
             while( index < totalValues && input.nbValues < ModulatedVectorsPerBlock )
@@ -366,27 +402,26 @@ public:
                     size_t mulSize = 1;
                     for( std::uint32_t i = 0; i < DimSize - 1; ++i )
                     {
-                        mulSize *= size[i];
+                        mulSize *= gi.size[i];
                         AxisReset<false>( Idx[i], Idx[i + 1], Max[i], Size[i], mulSize );
                     }
                 }
             }
         }
-        std::for_each( std::execution::par, blocks.begin(), blocks.end(), [&]( auto& block ) {
+
+        std::for_each( Exec, blocks.begin(), blocks.end(), [&]( auto& block ) {
             GenBlock( params, uniform, block.first, block.second );
             block.second.DoMinMax( block.first.nbValues );
         } );
 
         for( auto& b: blocks )
-            context.minMax << b.second.minMax;
-        context.output.resize( alignof( float32v ), totalValues );
-        Finalize( context );
+            gi.minMax << b.second.minMax;
+        gi.output.resize( alignof( float32v ), totalValues );
     }
 
-    void GenUniformGrid2D( Context& out, int xStart, int yStart, int xSize, int ySize, float frequency,
-                           int seed ) const final
+    void GenUniformGrid2D( GeneratorInput& gi ) const final
     {
-        GenUniformGrid<2>( out, { xStart, yStart }, { xSize, ySize }, frequency, seed );
+        GenUniformGrid<2>( gi );
     }
 
 private:
