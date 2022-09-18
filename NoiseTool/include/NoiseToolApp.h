@@ -19,6 +19,7 @@ namespace Magnum
         }
 
     private:
+        void updateCamera();
         void recomputeCamera();
         void quit();
         void createEditorWindows();
@@ -89,5 +90,6 @@ namespace Magnum
         bool                        mExternalNodeEditor = true;
         bool                        mShowTexturePreview = true;
         bool                        mShowFPS            = false;
+        bool                        mShowNodeEditor     = true;
     };
 } // namespace Magnum

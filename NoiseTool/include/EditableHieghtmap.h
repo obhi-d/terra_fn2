@@ -19,6 +19,7 @@
 
 #include "FastNoise/FastNoise.h"
 #include "MultiThreadQueues.h"
+#include "Settings.h"
 
 namespace Magnum
 {
@@ -30,69 +31,17 @@ namespace Magnum
 
         void Draw( FastNoiseNodeEditor& editor, const Matrix4& transformation, const Matrix4& projection,
                    const Vector3& cameraPosition );
-        void SetGenerator( FastNoise::SmartNode<const FastNoise::Generator> generator )
-        {
-            this->generator = generator;
-            heightsDirty    = true;
-        }
 
-        Vector2i GetGridSize() const
-        {
-            return gridSize;
-        }
 
-        Vector2 GetCenter() const
+        FastNoise::OutputMinMax GetMinMax() const
         {
-            return Vector2( offset ) + Vector2( gridSize * gridCount ) * 0.5;
+            return minMax;
         }
-
-        Vector2 GetMapSize() const
-        {
-            return Vector2( gridSize * gridCount );
-        }
-
-        Vector2 GetOffset() const
-        {
-            return Vector2( offset );
-        }
-
-        float GetFrequency() const
-        {
-            return frequency;
-        }
-
-        float GetSeed() const
-        {
-            return seed;
-        }
-
-        void ResetOffsets();
 
     private:
         void RegenreateGrid();
         void UpdateHeights();
-        void SetupSettingsHandlers();
 
-        using Color4x3        = std::array<Color4, 3>;
-        using ColorLayerValue = std::vector<std::tuple<Color4x3, bool>>;
-
-        struct Rotation
-        {
-            float theta = 0.0f;
-            float phi   = 0.0f;
-
-            Vector3 toDir() const
-            {
-                constexpr float pi       = 3.14159265358979323846f;
-                constexpr float radf     = pi / 180.0f;
-                auto            theta    = this->theta * radf;
-                auto            phi      = this->phi * radf;
-                auto            sinTheta = std::sin( theta );
-                auto            cosTheta = std::cos( theta );
-                auto            sinPhi   = std::sin( phi );
-                return -Vector3( sinPhi * cosTheta, std::cos( phi ), sinPhi * sinTheta ).normalized();
-            }
-        };
 
         class Shader : public GL::AbstractShaderProgram
         {
@@ -117,6 +66,7 @@ namespace Magnum
             Shader& SetHeightMultiplier( float iHeight );
             Shader& SetRenderStyle( int spec );
 
+
         private:
             GL::Shader CreateShader( GL::Version version, GL::Shader::Type type );
 
@@ -131,21 +81,8 @@ namespace Magnum
         };
 
 
-        FastNoise::SmartNode<const FastNoise::Generator> generator;
-        float                                            frequency        = 0.02f;
-        float                                            heightMultiplier = 10.0f;
-        int32_t                                          seed             = 1337;
-        Color3                                           sunColor         = Color3( 1.0f );
-        float                                            sunIntensity     = 1.0f;
-        Rotation                                         sunRotation;
-        int32_t                                          compressPrec = 31;
-        FastNoise::OutputMinMax                          minMax;
+        FastNoise::OutputMinMax minMax;
         // Bound settings
-
-        ColorLayerValue strataColorPerHeight;
-        Vector2i        offset    = Vector2i( -64, -64 );
-        Vector2i        gridSize  = Vector2i( 128, 128 );
-        Vector2i        gridCount = Vector2i( 1, 1 );
 
         GL::Buffer xyBuffer;
         GL::Buffer heightBuffer;
@@ -155,8 +92,6 @@ namespace Magnum
 
         std::unique_ptr<GL::Mesh> mesh;
         Shader                    shader;
-        bool                      heightsDirty = true;
-        bool                      firstDraw    = true;
-        bool                      edited       = false;
+        Settings::version         version;
     };
 } // namespace Magnum

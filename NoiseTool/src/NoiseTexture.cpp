@@ -28,16 +28,6 @@ using namespace Magnum;
 
 NoiseTexture::NoiseTexture()
 {
-    mBuildData.iteration = 0;
-    mBuildData.frequency = 0.02f;
-    mBuildData.seed      = 1337;
-    mBuildData.size      = { -1, -1 };
-    mBuildData.gridSize  = { 126, 126 };
-    mBuildData.offset    = {};
-
-
-    mExportBuildData = mBuildData;
-    SetupSettingsHandlers();
 }
 
 NoiseTexture::~NoiseTexture()
@@ -52,52 +42,26 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
     if( mTexData.valid() )
     {
         mTexData.wait();
-        auto texData = mTexData.get();
-        if( mCurrentIteration < texData.iteration )
-        {
-            mCurrentIteration = texData.iteration;
-            ImageView2D noiseImage( PixelFormat::RGBA8Srgb, texData.size, texData.textureData );
-            SetPreviewTexture( noiseImage );
-        }
+        auto        texData = mTexData.get();
+        ImageView2D noiseImage( PixelFormat::RGBA8Srgb, texData.size, texData.textureData );
+        SetPreviewTexture( noiseImage );
         texData.Free();
     }
 
-    bool regen    = mRegenerate;
-    auto GridSize = iParent.GetMeshGridSize();
-    if( GridSize != mBuildData.gridSize )
-    {
-        regen                     = true;
-        mBuildData.gridSize       = GridSize;
-        mExportBuildData.gridSize = GridSize;
-    }
+    auto& settings = Settings::get();
+
+    bool regen    = settings.versionCheck_edit( version );
+    auto GridSize = settings.gridSize();
+
 
     ImGui::SetNextWindowSize( ImVec2( 768, 768 ), ImGuiCond_FirstUseEver );
     ImGui::SetNextWindowPos( ImVec2( 1143, 305 ), ImGuiCond_FirstUseEver );
     if( ImGui::Begin( "Texture Preview", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse ) )
     {
         ImGui::PushItemWidth( 82.0f );
-        bool edited = false;
 
         ImVec2 contentSize = ImGui::GetContentRegionAvail();
         ImGui::SameLine();
-
-        Vector2i texSize = { mBuildData.size.x(), mBuildData.size.y() };
-
-        {
-            auto seed = iParent.GetSeed();
-            if( seed != mBuildData.seed )
-            {
-                mBuildData.seed = seed;
-                edited          = true;
-            }
-
-            auto freq = iParent.GetSeed();
-            if( freq != mBuildData.frequency )
-            {
-                mBuildData.frequency = freq;
-                edited               = true;
-            }
-        }
 
         auto exportProg = mExportProgress.load();
         if( exportProg > 0 )
@@ -109,47 +73,58 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
 
         ImGui::SameLine();
 
-        if( mBuildData.generator && Button( ICON_FA_BULLSEYE, "Recenter the preview texture" ) )
+        if( settings.generator() && Button( ICON_FA_BULLSEYE, "Recenter the preview texture" ) )
         {
-            mBuildData.offset.x() = -contentSize.x / 2;
-            mBuildData.offset.y() = -contentSize.y / 2;
+            offset.x() = -contentSize.x / 2;
+            offset.y() = -contentSize.y / 2;
 
             regen = true;
         }
 
         ImGui::SameLine();
-        if( mBuildData.generator && Button( ICON_FA_FILE_EXPORT, "Export the texture as PNG (Grayscale 16bit)" ) )
+        if( Magnum::Button( ICON_FA_SQUARE_PLUS, "Save node config" ) )
         {
-            mExportBuildData = mBuildData;
-            ImGui::OpenPopup( "Export PNG" );
-            mStatus = "Exporting PNG terrain data";
             iParent.AddHistoryRecord();
         }
 
-        /*
         ImGui::SameLine();
-        if( mBuildData.generator && ImGui::Button( ICON_FA_FILE_IMAGE ) )
+        if( Magnum::Button( ICON_FA_FILE_EXPORT, "Export grids as PNG" ) )
         {
-            auto size                       = mExportBuildData.size;
-            auto path                       = mExportBuildData.path;
-            auto nbPlanes                   = mExportBuildData.numberOfPlanes;
-            mExportBuildData                = mBuildData;
-            mExportBuildData.size           = size;
-            mExportBuildData.path           = path;
-            mExportBuildData.numberOfPlanes = nbPlanes;
-            ImGui::OpenPopup( "Export BMP" );
-            mStatus = "Exporting BMP terrain data";
-            if( iParent )
-                iParent->AddHistoryRecord();
+            ImGui::OpenPopup( "Export PNG" );
+            mStatus = "Exporting PNG terrain data";
+            DoExport( 0, 0 );
         }
-        */
 
         ImGui::SameLine();
-
-        if( mBuildData.generator && exportProg > 0 && exportProg != 100 )
+        if( Magnum::Button( ICON_FA_ARROW_LEFT_LONG, "Quick export left grid as PNG" ) )
         {
+            DoExport( 0, -1 );
+        }
+
+        ImGui::SameLine();
+        if( Magnum::Button( ICON_FA_ARROW_RIGHT_LONG, "Quick export right grid as PNG" ) )
+        {
+            DoExport( 0, 1 );
+        }
+
+        ImGui::SameLine();
+        if( Magnum::Button( ICON_FA_ARROW_UP_LONG, "Quick export upper grid as PNG" ) )
+        {
+            DoExport( -1, 0 );
+        }
+
+        ImGui::SameLine();
+        if( Magnum::Button( ICON_FA_ARROW_DOWN_LONG, "Quick export lower grid as PNG" ) )
+        {
+            DoExport( 1, 0 );
+        }
+
+        if( settings.generator() && exportProg > 0 && exportProg != 100 )
+        {
+            ImGui::SameLine();
             ImGui::ProgressBar( exportProg / 100.f );
         }
+
         else if( exportProg == 100 && mExportTask.valid() )
         {
             if( mExportTask.valid() )
@@ -160,25 +135,24 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
             mStatus         = "Export finished.";
         }
 
-        ImGui::SameLine();
-        ImGui::Text( "Status: %s", mStatus.c_str() );
+        if( !mStatus.empty() )
+        {
+            ImGui::SameLine();
+            ImGui::Text( "%s", mStatus.c_str() );
+        }
 
         ImGui::PopItemWidth();
 
         if( contentSize.x >= 1 && contentSize.y >= 1 &&
-            ( edited || mBuildData.size.x() != (int)contentSize.x || mBuildData.size.y() != (int)contentSize.y ) )
+            ( size.x() != (int)contentSize.x || size.y() != (int)contentSize.y ) )
         {
             Vector2i newSize = { (int)contentSize.x, (int)contentSize.y };
 
-            mBuildData.offset -= Vector2( newSize - mBuildData.size ) / 2;
-            mBuildData.size = newSize;
-            regen           = true;
+            offset -= Vector2( newSize - size ) / 2;
+            size  = newSize;
+            regen = true;
         }
 
-        if( edited )
-        {
-            ImGuiExtra::MarkSettingsDirty();
-        }
 
         ImGui::PushStyleColor( ImGuiCol_Button, 0 );
         ImGui::PushStyleColor( ImGuiCol_ButtonActive, 0 );
@@ -197,18 +171,18 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
         if( ImGui::IsItemHovered() )
         {
 
-            auto oldOffset = mBuildData.offset;
+            auto oldOffset = offset;
 
             if( ImGui::IsMouseDragging( ImGuiMouseButton_Left ) )
             {
                 Vector2 dragDelta( ImGui::GetMouseDragDelta( ImGuiMouseButton_Left ) );
                 ImGui::ResetMouseDragDelta( ImGuiMouseButton_Left );
 
-                mBuildData.offset.x() -= dragDelta.x();
-                mBuildData.offset.y() -= dragDelta.y();
+                offset.x() -= dragDelta.x();
+                offset.y() -= dragDelta.y();
             }
 
-            if( oldOffset != mBuildData.offset )
+            if( oldOffset != offset )
             {
                 regen = true;
             }
@@ -216,8 +190,8 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
             auto mouse = ImGui::GetMousePos();
             auto delta = mouse - ImagePos;
 
-            auto CoordX = ( mBuildData.offset.x() + delta.x );
-            auto CoordY = ( mBuildData.offset.y() + delta.y );
+            auto CoordX = ( offset.x() + delta.x );
+            auto CoordY = ( offset.y() + delta.y );
 
 
             auto PlaneX = (int)( ( ( std::abs( CoordX ) + GridSize.x() * 0.5f ) / GridSize.x() ) );
@@ -241,156 +215,148 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
             else
                 return (int)size - std::abs( (int)( offset + ( size / 2 ) ) % (int)size );
         };
-        auto start = getMod( mBuildData.offset.x(), GridSize.x() );
+        auto start = getMod( offset.x(), GridSize.x() );
         while( start < size.x )
         {
             DrawList->AddLine( ImVec2( ImagePos.x + start, ImagePos.y ),
                                ImVec2( ImagePos.x + start, ImagePos.y + size.y ),
-                               ImGui::GetColorU32( ImGuiCol_TextDisabled ) );
+                               ImGui::GetColorU32( ImVec4( 0.6f, 0.6f, 0.2f, 1.0f ) ) );
             start += GridSize.x();
         }
 
         // horizontal grids
-        start = getMod( mBuildData.offset.y(), GridSize.y() );
+        start = getMod( offset.y(), GridSize.y() );
         while( start < size.y )
         {
             DrawList->AddLine( ImVec2( ImagePos.x, ImagePos.y + start ),
                                ImVec2( ImagePos.x + size.x, ImagePos.y + start ),
-                               ImGui::GetColorU32( ImGuiCol_TextDisabled ) );
+                               ImGui::GetColorU32( ImVec4( 0.6f, 0.6f, 0.2f, 1.0f ) ) );
             start += GridSize.y();
         }
 
-        DoExport( GridSize );
+        DoExportPNG();
     }
     ImGui::End();
 
     if( regen )
-        ReGenerate( mBuildData.generator );
+        ReGenerate();
 }
 
-void NoiseTexture::DoExport( Vector2i grid )
+void NoiseTexture::DoExport( int x, int y )
 {
-    DoExportPNG();
+    auto&      settings = Settings::get();
+    ExportData data;
+    data.name      = settings.name();
+    data.frequency = settings.frequency();
+    data.gridStart = settings.exportGridStart();
+    data.gridCount = settings.exportGridCount();
+    data.gridSize  = settings.exportGridSize();
+    data.generator = settings.generator();
+    data.path      = settings.exportPath().path;
+    data.seed      = settings.seed();
+    if( x || y )
+    {
+        data.gridCount = Vector2i( 1, 1 );
+        // quick exporting
+        if( x )
+            data.gridStart.x() += x;
+        if( y )
+            data.gridStart.x() += y;
+        settings.exportGridStart( data.gridStart );
+    }
+
+    mExportTask = std::async( std::launch::async, [buildData = data, this]() {
+        // compute size
+        auto buffer = std::vector<std::uint16_t>( ( buildData.gridSize.x() + 1 ) * ( buildData.gridSize.y() + 1 ) );
+
+        FastNoise::Buffer fsBuffer;
+
+        std::filesystem::path path = buildData.path.data();
+        std::error_code       ec;
+        std::filesystem::create_directories( path, ec );
+        mExportProgress = 0;
+
+        auto step = 100 / ( buildData.gridCount.y() * buildData.gridCount.x() );
+        for( int vy = 0; vy < buildData.gridCount.y(); ++vy )
+        {
+            for( int vx = 0; vx < buildData.gridCount.x(); ++vx )
+            {
+                int gx = ( vx + buildData.gridStart.x() );
+                int gy = ( vy + buildData.gridStart.y() );
+                int x  = ( gx * buildData.gridSize.x() ) - ( buildData.gridSize.x() / 2 );
+                int y  = ( gy * buildData.gridSize.y() ) - ( buildData.gridSize.y() / 2 );
+
+                BuildTerrainDataRAW( buffer, fsBuffer, buildData, Vector2i( x, y ) );
+
+                png_structp png_ptr = png_create_write_struct( PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr );
+                if( !png_ptr )
+                    return;
+                png_infop info_ptr = png_create_info_struct( png_ptr );
+                if( !info_ptr )
+                {
+                    png_destroy_write_struct( &png_ptr, (png_infopp)NULL );
+                    return;
+                }
+
+                if( setjmp( png_jmpbuf( png_ptr ) ) )
+                {
+                    png_destroy_write_struct( &png_ptr, &info_ptr );
+                    return;
+                }
+
+
+                std::string filename = buildData.name;
+                if( filename.empty() )
+                    filename = "untitled";
+                filename += "_x";
+                filename += std::to_string( gx );
+                filename += "_y";
+                filename += std::to_string( gy );
+                filename += ".png";
+                filename   = ( path / filename ).string();
+                FILE* file = fopen( filename.c_str(), "wb" );
+                png_init_io( png_ptr, file );
+                png_set_IHDR( png_ptr, info_ptr, (uint32_t)buildData.gridSize.x() + 1,
+                              (uint32_t)buildData.gridSize.y() + 1, 16, PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE,
+                              PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT );
+                png_write_info( png_ptr, info_ptr );
+                png_set_swap( png_ptr );
+                auto row_pointers = std::vector<png_bytep>( buildData.gridSize.y() + 1 );
+                auto start        = buffer.data();
+                for( int i = 0; i <= buildData.gridSize.y(); ++i )
+                {
+                    row_pointers[i] = (png_bytep)start;
+                    start += ( buildData.gridSize.x() + 1 );
+                }
+                png_write_image( png_ptr, row_pointers.data() );
+                png_write_end( png_ptr, info_ptr );
+                png_destroy_write_struct( &png_ptr, &info_ptr );
+                fclose( file );
+                mExportProgress.fetch_add( step );
+            }
+        }
+        mExportProgress = 100;
+    } );
 }
 
 void NoiseTexture::DoExportPNG()
 {
+    auto& settings = Settings::get();
+
     if( ImGui::BeginPopupModal( "Export PNG", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings ) )
     {
 
         ImGui::PushItemWidth( 200.0f );
-
-
-        if( ImGui::DragInt2( "Grid Size", mExportBuildData.gridSize.data(), 2, 1, 8129 ) )
-        {
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( ImGui::DragInt2( "Grid Count", mExportBuildData.gridCount.data(), 2, 1, 256 ) )
-        {
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( ImGui::DragInt2( "Grid Start", mExportBuildData.gridStart.data(), 2, 1, 8129 ) )
-        {
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( Magnum::Button( "Browse", "Select a folder to export to." ) )
-            ImGuiFileDialog::Instance()->OpenDialog( "BrowseFileDlgKey", "Raw", nullptr, mExportBuildData.path );
-
-        if( ImGuiFileDialog::Instance()->Display( "BrowseFileDlgKey", 32, ImVec2 { 600, 400 } ) )
-        {
-            if( ImGuiFileDialog::Instance()->IsOk() )
-            {
-                mExportBuildData.path = ImGuiFileDialog::Instance()->GetFilePathName();
-                ImGuiExtra::MarkSettingsDirty();
-            }
-            ImGuiFileDialog::Instance()->Close();
-        }
+        settings.drawExport();
 
         ImGui::SameLine();
-        ImGui::Text( mExportBuildData.path.data() );
+        ImGui::Text( settings.exportPath().path.c_str() );
 
         if( ImGui::Button( "Export (async)" ) )
         {
             ImGui::CloseCurrentPopup();
 
-            mExportBuildData.name = mName;
-            mExportTask           = std::async( std::launch::async, [buildData = mExportBuildData, this]() {
-                // compute size
-                auto buffer =
-                    std::vector<std::uint16_t>( ( buildData.gridSize.x() + 1 ) * ( buildData.gridSize.y() + 1 ) );
-
-                FastNoise::Buffer fsBuffer;
-
-                std::filesystem::path path = buildData.path.data();
-                std::error_code       ec;
-                std::filesystem::create_directories( path, ec );
-                mExportProgress = 0;
-
-                auto step = 100 / ( buildData.gridCount.y() * buildData.gridCount.x() );
-                for( int vy = 0; vy < buildData.gridCount.y(); ++vy )
-                {
-                    for( int vx = 0; vx < buildData.gridCount.x(); ++vx )
-                    {
-                        int gx = ( vx + buildData.gridStart.x() );
-                        int gy = ( vy + buildData.gridStart.y() );
-                        int x  = ( gx * buildData.gridSize.x() ) - ( buildData.gridSize.x() / 2 );
-                        int y  = ( gy * buildData.gridSize.y() ) - ( buildData.gridSize.y() / 2 );
-
-                        BuildTerrainDataRAW( buffer, fsBuffer, buildData, Vector2i( x, y ) );
-
-                        png_structp png_ptr =
-                            png_create_write_struct( PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr );
-                        if( !png_ptr )
-                            return;
-                        png_infop info_ptr = png_create_info_struct( png_ptr );
-                        if( !info_ptr )
-                        {
-                            png_destroy_write_struct( &png_ptr, (png_infopp)NULL );
-                            return;
-                        }
-
-                        if( setjmp( png_jmpbuf( png_ptr ) ) )
-                        {
-                            png_destroy_write_struct( &png_ptr, &info_ptr );
-                            return;
-                        }
-
-
-                        std::string filename = buildData.name;
-                        if( filename.empty() )
-                            filename = "untitled";
-                        filename += "_x";
-                        filename += std::to_string( gx );
-                        filename += "_y";
-                        filename += std::to_string( gy );
-                        filename += ".png";
-                        filename   = ( path / filename ).string();
-                        FILE* file = fopen( filename.c_str(), "wb" );
-                        png_init_io( png_ptr, file );
-                        png_set_IHDR( png_ptr, info_ptr, (uint32_t)buildData.gridSize.x() + 1,
-                                                (uint32_t)buildData.gridSize.y() + 1, 16, PNG_COLOR_TYPE_GRAY, PNG_INTERLACE_NONE,
-                                                PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT );
-                        png_write_info( png_ptr, info_ptr );
-                        png_set_swap( png_ptr );
-                        auto row_pointers = std::vector<png_bytep>( buildData.gridSize.y() + 1 );
-                        auto start        = buffer.data();
-                        for( int i = 0; i <= buildData.gridSize.y(); ++i )
-                        {
-                            row_pointers[i] = (png_bytep)start;
-                            start += ( buildData.gridSize.x() + 1 );
-                        }
-                        png_write_image( png_ptr, row_pointers.data() );
-                        png_write_end( png_ptr, info_ptr );
-                        png_destroy_write_struct( &png_ptr, &info_ptr );
-                        fclose( file );
-                        mExportProgress.fetch_add( step );
-                    }
-                }
-                mExportProgress = 100;
-            } );
+            DoExport( 0, 0 );
         }
         ImGui::SameLine();
         if( ImGui::Button( "Cancel" ) )
@@ -409,22 +375,27 @@ void NoiseTexture::SetPreviewTexture( ImageView2D& imageView )
     mNoiseTexture.setStorage( 1, GL::TextureFormat::RGBA8, imageView.size() ).setSubImage( 0, {}, imageView );
 }
 
-void NoiseTexture::ReGenerate( FastNoise::SmartNodeArg<> generator )
+void NoiseTexture::ReGenerate()
 {
-    if( !generator )
+    auto& settings = Settings::get();
+    if( !settings.generator() )
         return;
-    mBuildData.generator = generator;
-    mBuildData.iteration++;
 
-    if( mBuildData.size.x() > 0 && mBuildData.size.y() > 0 && generator )
+    if( size.x() > 0 && size.y() > 0 )
     {
-
-        mTexData    = std::async( std::launch::async, [buildData = mBuildData, this]() -> TextureData {
-            return BuildTexture<FastNoise::ConvertRGBA8>(
-                buildData.generator, buildData.iteration, buildData.texBuffer, buildData.gridSize, buildData.size,
-                Vector2i( buildData.offset ), buildData.frequency, buildData.seed );
+        static BuildData data;
+        data.frequency = settings.frequency();
+        data.gridSize  = settings.gridSize();
+        data.generator = settings.generator();
+        data.seed      = settings.seed();
+        data.size      = size;
+        data.offset    = offset;
+        mTexData       = std::async( std::launch::async, [buildData = data, this]() -> TextureData {
+            return BuildTexture<FastNoise::ConvertRGBA8>( buildData.generator, buildData.texBuffer, buildData.gridSize,
+                                                          buildData.size, Vector2i( buildData.offset ),
+                                                          buildData.frequency, buildData.seed );
         } );
-        mHasTexture = true;
+        mHasTexture    = true;
     }
 
     mRegenerate = false;
@@ -432,9 +403,9 @@ void NoiseTexture::ReGenerate( FastNoise::SmartNodeArg<> generator )
 
 template<typename Wrapper>
 NoiseTexture::TextureData NoiseTexture::BuildTexture( FastNoise::SmartNode<const FastNoise::Generator> generator,
-                                                      uint64_t iter, FastNoise::Buffer& buffer,
-                                                      Magnum::Vector2i gridSize, Magnum::Vector2i size,
-                                                      Magnum::Vector2i offset, float freq, int seed )
+                                                      FastNoise::Buffer& buffer, Magnum::Vector2i gridSize,
+                                                      Magnum::Vector2i size, Magnum::Vector2i offset, float freq,
+                                                      int seed )
 {
     buffer.resize( 32, (size_t)( size.x() * size.y() ) );
 
@@ -454,67 +425,17 @@ NoiseTexture::TextureData NoiseTexture::BuildTexture( FastNoise::SmartNode<const
 
     gen->GenUniformGrid2D( context );
 
-    return TextureData( iter, size, context.minMax, buffer );
+    return TextureData( size, context.minMax, buffer );
 }
 
 void NoiseTexture::BuildTerrainDataRAW( std::vector<std::uint16_t>& buffer, FastNoise::Buffer& out,
                                         const ExportData& buildData, Magnum::Vector2i offset )
 {
 
-    auto  data   = BuildTexture<FastNoise::ConvertRAW16>( buildData.generator, 0, out, buildData.gridSize,
+    auto  data   = BuildTexture<FastNoise::ConvertRAW16>( buildData.generator, out, buildData.gridSize,
                                                        buildData.gridSize + Vector2i( 1, 1 ), offset,
                                                        buildData.frequency, buildData.seed );
     auto* floats = (float*)out.begin();
     for( std::size_t pix = 0; pix < buffer.size(); ++pix )
         buffer[pix] = static_cast<std::uint16_t>( floats[pix] );
-}
-
-void NoiseTexture::SetupSettingsHandlers()
-{
-    ImGuiSettingsHandler editorSettings;
-    editorSettings.TypeName   = "NoiseToolNoiseTexture";
-    editorSettings.TypeHash   = ImHashStr( editorSettings.TypeName );
-    editorSettings.UserData   = this;
-    editorSettings.WriteAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* outBuf ) {
-        auto* noiseTexture = (NoiseTexture*)handler->UserData;
-        outBuf->appendf( "\n[%s][Settings]\n", handler->TypeName );
-
-        outBuf->appendf( "frequency=%f\n", noiseTexture->mBuildData.frequency );
-        outBuf->appendf( "seed=%d\n", noiseTexture->mBuildData.seed );
-        outBuf->appendf( "export_grid_size=%d:%d\n", noiseTexture->mExportBuildData.gridSize.x(),
-                         noiseTexture->mExportBuildData.gridSize.y() );
-        outBuf->appendf( "export_grid_start=%d:%d\n", noiseTexture->mExportBuildData.gridStart.x(),
-                         noiseTexture->mExportBuildData.gridStart.y() );
-        outBuf->appendf( "export_grid_count=%d:%d\n", noiseTexture->mExportBuildData.gridCount.x(),
-                         noiseTexture->mExportBuildData.gridCount.y() );
-        outBuf->appendf( "path=%s\n", noiseTexture->mExportBuildData.path.c_str() );
-        outBuf->appendf( "name=%s\n", noiseTexture->mName.c_str() );
-    };
-    editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
-        if( strcmp( name, "Settings" ) == 0 )
-        {
-            return handler->UserData;
-        }
-
-        return nullptr;
-    };
-    editorSettings.ReadLineFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry, const char* line ) {
-        auto* noiseTexture = (NoiseTexture*)handler->UserData;
-
-        sscanf( line, "frequency=%f", &noiseTexture->mBuildData.frequency );
-        sscanf( line, "seed=%d", &noiseTexture->mBuildData.seed );
-        sscanf( line, "export_grid_size=%d:%d", &noiseTexture->mExportBuildData.gridSize.x(),
-                &noiseTexture->mExportBuildData.gridSize.y() );
-        sscanf( line, "export_grid_start=%d:%d", &noiseTexture->mExportBuildData.gridStart.x(),
-                &noiseTexture->mExportBuildData.gridStart.y() );
-        sscanf( line, "export_grid_count=%d:%d", &noiseTexture->mExportBuildData.gridCount.x(),
-                &noiseTexture->mExportBuildData.gridCount.y() );
-        char name[256] = {};
-        if( sscanf( line, "path=%s", name ) == 1 )
-            noiseTexture->mExportBuildData.path = name;
-        else if( sscanf( line, "name=%s", name ) == 1 )
-            noiseTexture->mName = name;
-    };
-
-    ImGuiExtra::AddOrReplaceSettingsHandler( editorSettings );
 }

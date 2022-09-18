@@ -157,7 +157,7 @@ add_executable(Terra
     "src/ImGuiFileDialog.cpp"
     "src/EditableHeightmap.cpp" 
     "src/ToolWindow.cpp"
-    "src/Worker.cpp") 
+    "src/Worker.cpp" "src/Settings.cpp") 
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
 target_include_directories(Terra PRIVATE 
@@ -179,6 +179,7 @@ target_link_libraries(Terra PRIVATE
     png_static
     SDL2::SDL2
 )
+target_compile_features(Terra PUBLIC cxx_std_20)
 add_dependencies(Terra MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
 # Windows HiDPI support
 if(CORRADE_TARGET_WINDOWS)

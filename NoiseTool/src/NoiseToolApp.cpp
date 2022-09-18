@@ -17,6 +17,7 @@
 #include "ImGuiUtils.h"
 #include "ImageImporter.h"
 #include "SDL.h"
+#include "Settings.h"
 
 using namespace Magnum;
 
@@ -39,6 +40,8 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     addFont( windowSize(), framebufferSize(), dpiScaling() );
 
     InitResources();
+
+    Settings::get();
 
     const Vector2 size = Vector2 { windowSize() } / dpiScaling();
 
@@ -89,6 +92,8 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
 
 NoiseToolApp::~NoiseToolApp()
 {
+
+    Settings::get().quit();
     mSkipDraw = true;
     ImGui::SetCurrentContext( mImGuiContextMain );
     // Avoid trying to save settings after node editor is already destroyed
@@ -125,20 +130,8 @@ void Magnum::NoiseToolApp::createEditorWindows()
     mNodes.create( *this, "Node Editor", Vector2i( 1280, 720 ), dpiScaling() );
 }
 
-void NoiseToolApp::drawEvent()
+void NoiseToolApp::updateCamera()
 {
-    if( mSkipDraw )
-        return;
-    SDL_GL_MakeCurrent( window(), glContext() );
-    GL::defaultFramebuffer.setViewport( { {}, framebufferSize() } );
-
-    GL::defaultFramebuffer.clear( GL::FramebufferClear::Color | GL::FramebufferClear::Depth );
-
-    mImGuiIntegrationContext.newFrame();
-
-    mNodeEditor.BeginDraw();
-
-    // Update camera pos
     Vector3 cameraVelocity( 0 );
     if( mKeyDown[Key_W] || mKeyDown[Key_Up] )
     {
@@ -177,6 +170,26 @@ void NoiseToolApp::drawEvent()
         transform.translation() += transform.rotation() * cameraVelocity;
         mCameraObject.setTransformation( transform );
     }
+}
+
+void NoiseToolApp::drawEvent()
+{
+    if( mSkipDraw )
+        return;
+    SDL_GL_MakeCurrent( window(), glContext() );
+    GL::defaultFramebuffer.setViewport( { {}, framebufferSize() } );
+
+    GL::defaultFramebuffer.clear( GL::FramebufferClear::Color | GL::FramebufferClear::Depth );
+
+    auto& settings = Settings::get();
+
+    mImGuiIntegrationContext.newFrame();
+
+    settings.beginFrame();
+    mNodeEditor.BeginDraw();
+
+    // Update camera pos
+    updateCamera();
 
     if( mBackFaceCulling )
     {
@@ -198,9 +211,13 @@ void NoiseToolApp::drawEvent()
 
         ImGui::SameLine();
 
-        if( Magnum::Button( ICON_FA_TOOLBOX, "Show Node Editor." ) )
+        if( ToggleButton( ICON_FA_GEAR, mShowNodeEditor, ImVec2( 20, 20 ),
+                          mShowNodeEditor ? "Hide Node Editor." : "Show Node Editor." ) )
         {
-            mNodes.show();
+            if( mShowNodeEditor )
+                mNodes.show();
+            else
+                mNodes.hide();
         }
 
         ImGui::SameLine();
@@ -230,7 +247,7 @@ void NoiseToolApp::drawEvent()
 
         if( Magnum::Button( ICON_FA_BULLSEYE, "Reset heightmap offsets" ) )
         {
-            mNodeEditor.ResetOffsets();
+            settings.resetOffsets();
         }
 
         ImGui::SameLine();
@@ -245,6 +262,7 @@ void NoiseToolApp::drawEvent()
         Magnum::ToggleButton( ICON_FA_IMAGE, mShowTexturePreview, ImVec2( 20, 20 ),
                               mShowTexturePreview ? "Hide texture preview" : "Show texture preview" );
 
+
         ImGui::Text( "Rendering" );
         ImGui::Separator();
 
@@ -258,19 +276,29 @@ void NoiseToolApp::drawEvent()
 
         ImGui::SameLine();
 
-        Magnum::ToggleButton( ICON_FA_CLOCK, mShowFPS, ImVec2( 20, 20 ),
-                              mShowFPS ? "Hide time taken by a frame" : "Show time taken by a frame" );
-
-        if( mShowFPS )
-        {
-            ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
-                         Double( ImGui::GetIO().Framerate ) );
-        }
+        Magnum::ToggleButton( ICON_FA_NOTE_STICKY, mShowFPS, ImVec2( 20, 20 ), mShowFPS ? "Hide stats" : "Show stats" );
     }
+
+    ImGui::PushItemWidth( 250.0f );
+
+    ImGui::Text( "Settings" );
+    ImGui::Separator();
+
+    settings.draw();
+    ImGui::PopItemWidth();
 
     mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(),
                       mCameraObject.transformation().translation() );
 
+    if( mShowFPS )
+    {
+        auto cameraPosition = mCameraObject.transformation().translation();
+        auto minMax         = mNodeEditor.GetMinMax();
+        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
+                     Double( ImGui::GetIO().Framerate ) );
+        ImGui::Text( "MinMax: %0.1f, %0.1f Camera Pos: %0.1f, %0.1f, %0.1f", minMax.min, minMax.max, cameraPosition.x(),
+                     cameraPosition.y(), cameraPosition.z() );
+    }
 
     ImGui::End();
 
@@ -328,6 +356,7 @@ void NoiseToolApp::drawEvent()
 
     mNodeEditor.UpdateSelected();
     mNodeEditor.EndDraw();
+    settings.endFrame();
     /* Reset state. Only needed if you want to draw something else with
        different state after. */
     GL::Renderer::enable( GL::Renderer::Feature::DepthTest );
@@ -685,11 +714,11 @@ void NoiseToolApp::quit()
 void NoiseToolApp::recomputeCamera()
 {
 
-    auto sx = (float)mNodeEditor.GetMeshGridSize().x();
+    auto sx = (float)Settings::get().gridSize().x();
 
     auto d = std::tan( mFOV ) * sx;
     auto y = d / std::sin( (float)Rad( Deg( mCamDefaultLookAtAngle ) ) ) * 0.5;
-    auto z = mNodeEditor.GetMeshGridSize().y() * 0.5;
+    auto z = Settings::get().gridSize().y() * 0.5;
 
     auto eye       = Vector3( 0, y, z );
     auto origin    = Vector3( 0, 0, 0 );

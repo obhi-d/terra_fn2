@@ -31,4 +31,7 @@ The fork is focused on the Terra, a heightmap generator, rather than the actual 
 - [ ] Grid names
 - [ ] Strata bound to grid by name/index
 - [ ] Generate per grid, grid id stored in Uniform
+- [ ] Use GPU 
+- [ ] Erosion (https://github.com/dandrino/terrain-erosion-3-ways)
+- [ ] Shift+A to search and add in Node Editor
 ![NoiseTool](example/snapshot.png)

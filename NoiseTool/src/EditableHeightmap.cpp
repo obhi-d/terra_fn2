@@ -13,23 +13,14 @@ namespace Magnum
 
     EditableHeightmap::EditableHeightmap()
     {
-        SetupSettingsHandlers();
         RegenreateGrid();
-    }
-
-    void EditableHeightmap::ResetOffsets()
-    {
-        auto oldOffset = offset;
-        auto mapSize   = GetMapSize();
-        offset.x()     = -mapSize.x() / 2;
-        offset.y()     = -mapSize.y() / 2;
-        if( offset != oldOffset )
-            edited = true;
     }
 
     void EditableHeightmap::RegenreateGrid()
     {
-        auto     mapSize = GetMapSize();
+        auto& settings = Settings::get();
+
+        auto     mapSize = settings.mapSize();
         uint32_t VCount  = ( mapSize.y() + 1 ) * ( mapSize.x() + 1 );
         uint32_t ICount  = ( mapSize.y() ) * ( mapSize.x() );
         auto     data    = std::vector<Vector2>( VCount );
@@ -84,32 +75,33 @@ namespace Magnum
 
     void EditableHeightmap::UpdateHeights()
     {
-        if( !generator )
+        auto& settings = Settings::get();
+
+        if( !settings.generator() )
             return;
-        auto     mapSize = GetMapSize();
+
+        auto     mapSize = settings.mapSize();
         int      sy      = mapSize.y();
         int      sx      = mapSize.x();
         uint32_t VCount  = ( mapSize.y() + 1 ) * ( mapSize.x() + 1 );
 
         FastNoise::GeneratorInput ctx( heights );
 
-        float startY = -( (float)sy ) * 0.5f + offset.x();
-        float startX = -( (float)sx ) * 0.5f + offset.y();
+        float startY = -( (float)sy ) * 0.5f + settings.offset().x();
+        float startX = -( (float)sx ) * 0.5f + settings.offset().y();
 
         ctx.start[0]    = (int)startX;
         ctx.start[1]    = (int)startY;
         ctx.size[0]     = ( sx + 1 );
         ctx.size[1]     = ( sy + 1 );
-        ctx.seed        = seed;
-        ctx.frequency   = frequency;
-        ctx.gridSize[0] = gridSize.x();
-        ctx.gridSize[1] = gridSize.y();
+        ctx.seed        = settings.seed();
+        ctx.frequency   = settings.frequency();
+        ctx.gridSize[0] = settings.gridSize().x();
+        ctx.gridSize[1] = settings.gridSize().y();
 
-        generator->GenUniformGrid2D( ctx );
+        settings.generator()->GenUniformGrid2D( ctx );
 
         heightBuffer.setSubData( 0, Containers::ArrayView<float>( heights.begin(), VCount ) );
-
-        heightsDirty = false;
 
         minMax = ctx.minMax;
     }
@@ -117,145 +109,43 @@ namespace Magnum
     void EditableHeightmap::Draw( FastNoiseNodeEditor& editor, const Matrix4& transformation, const Matrix4& projection,
                                   const Vector3& cameraPosition )
     {
-        if( !generator )
-        {
+        auto& settings = Settings::get();
+
+        if( !settings.generator() )
             return;
-        }
 
         Matrix4 transformationProjection = projection * transformation;
 
         Frustum camFrustum = Frustum::fromMatrix( transformationProjection );
         shader.SetTransformationProjectionMatrix( transformationProjection );
 
+        if( settings.versionCheck_heightMultiplier( version ) )
+            shader.SetHeightMultiplier( settings.heightMultiplier() );
 
-        edited |= ImGui::DragInt( "Seed", &seed );
-        edited |= ImGui::DragFloat( "Frequency", &frequency, 0.0005f, 0, 0, "%.4f" );
-        if( edited )
-            editor.SetEdited();
-        edited |= ImGui::DragInt2( "Grid Count", gridCount.data(), 1, 1, 20 );
-        edited |= ImGui::DragInt2( "Grid Size", gridSize.data(), 1, 2, std::numeric_limits<int>::max() );
-        edited |= ImGui::DragInt2( "Offset", offset.data() );
+        if( settings.versionCheck_sunColor( version ) | settings.versionCheck_sunIntensity( version ) )
+            shader.SetSunIntensity( settings.sunColor(), settings.sunIntensity() );
 
-        if( ImGui::DragFloat( "Heightmap Multiplier", &heightMultiplier, 0.5f ) || firstDraw )
-        {
-            shader.SetHeightMultiplier( heightMultiplier );
-        }
+        if( settings.versionCheck_sunRotation( version ) )
+            shader.SetSunDirection( settings.sunRotation().toDir() );
 
-        bool textureChanged = firstDraw;
-        bool sunChanged     = firstDraw;
-        if( ImGui::ColorEdit3( ICON_FA_SUN " Color", sunColor.data() ) )
-        {
-            sunChanged = true;
-            ImGuiExtra::MarkSettingsDirty();
-        }
+        if( settings.versionCheck_renderStyle( version ) )
+            shader.SetRenderStyle( settings.renderStyle() );
 
-        if( ImGui::DragFloat( ICON_FA_SUN " Intensity", &sunIntensity, 0.01f, 0, 100000.f ) )
-        {
-            sunChanged = true;
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( ImGui::DragFloat( ICON_FA_SUN " Rotation (phi)", &sunRotation.phi, 0.5f, 0, 360 ) )
-        {
-            sunChanged = true;
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( ImGui::DragFloat( ICON_FA_SUN " Rotation (theta)", &sunRotation.theta, 0.5f, 0, 180 ) )
-        {
-            sunChanged = true;
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( ImGui::DragInt( "Lighting Style", &compressPrec, 1, 1, 10000 ) )
-        {
-            sunChanged = true;
-#ifndef EQUAL_PREC
-            edited = true;
-#endif
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( sunChanged )
-        {
-            shader.SetSunDirection( sunRotation.toDir() );
-            shader.SetSunIntensity( sunColor, sunIntensity );
-            shader.SetRenderStyle( compressPrec );
-        }
-
+        if( settings.versionCheck_strataColorPerHeight( version ) )
+            shader.SetHeightColorMap( settings.strataColorPerHeight() );
         // color panel
-        int   colorIndex   = 0;
-        float lastAlpha[3] = { 0 };
-        for( auto& [color, active]: strataColorPerHeight )
-        {
-            for( int cl = 0; cl < 3; cl++ )
-            {
-                ImGui::PushID( colorIndex++ );
-                if( ImGui::ColorEdit4( "", color[cl].data(),
-                                       ImGuiColorEditFlags_::ImGuiColorEditFlags_NoInputs |
-                                           ImGuiColorEditFlags_AlphaBar ) )
-                {
-                    if( color[cl].a() < lastAlpha[cl] )
-                        color[cl].a() = lastAlpha[cl];
-                    lastAlpha[cl]  = color[cl].a();
-                    textureChanged = true;
-                }
-                ImGui::PopID();
-                ImGui::SameLine();
-            }
-            ImGui::SetNextItemWidth( 20 );
-            ImGui::PushID( colorIndex++ );
-            if( ImGui::Button( ICON_FA_TRASH_CAN ) )
-            {
-                textureChanged = true;
-                active         = false;
-            }
-            ImGui::PopID();
-        }
 
-        if( Button( ICON_FA_LAYER_GROUP, "Add color layer to sample from (x,y,z) (alpha is limiting height)" ) )
+        if( settings.versionCheck_grid( version ) )
         {
-            if( strataColorPerHeight.empty() )
-                strataColorPerHeight.emplace_back( Color4( 0.2f, 0.2f, 0.2f, 0.0f ), true );
-            else
-                strataColorPerHeight.emplace_back( strataColorPerHeight.back() );
-            textureChanged = true;
-        }
-
-        if( textureChanged )
-        {
-            if( strataColorPerHeight.size() > 0 )
-            {
-                auto beg = strataColorPerHeight.begin();
-                while( beg != strataColorPerHeight.end() )
-                {
-                    if( !std::get<1>( *beg ) )
-                        beg = strataColorPerHeight.erase( beg );
-                    else
-                        beg++;
-                }
-            }
-            shader.SetHeightColorMap( strataColorPerHeight );
-            ImGuiExtra::MarkSettingsDirty();
-        }
-
-        if( edited || firstDraw )
-        {
-            edited = false;
             RegenreateGrid();
-            ImGuiExtra::MarkSettingsDirty();
         }
 
-        if( heightsDirty )
+        if( settings.versionCheck_edit( version ) )
         {
             UpdateHeights();
         }
 
-        ImGui::Text( "MinMax: %0.1f, %0.1f Camera Pos: %0.1f, %0.1f, %0.1f", minMax.min, minMax.max, cameraPosition.x(),
-                     cameraPosition.y(), cameraPosition.z() );
-
         shader.draw( *mesh );
-        firstDraw = false;
     }
 
     EditableHeightmap::Shader::Shader()
@@ -371,75 +261,6 @@ namespace Magnum
             }
         }
         return *this;
-    }
-
-
-    void EditableHeightmap::SetupSettingsHandlers()
-    {
-        ImGuiSettingsHandler editorSettings;
-        editorSettings.TypeName   = "NoiseToolEditableHeightmap";
-        editorSettings.TypeHash   = ImHashStr( editorSettings.TypeName );
-        editorSettings.UserData   = this;
-        editorSettings.WriteAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* outBuf ) {
-            auto* _ = (EditableHeightmap*)handler->UserData;
-            outBuf->appendf( "\n[%s][Settings]\n", handler->TypeName );
-
-            outBuf->appendf( "frequency=%f\n", _->frequency );
-            outBuf->appendf( "heightmap_multiplier=%f\n", _->heightMultiplier );
-            outBuf->appendf( "seed=%d\n", _->seed );
-            outBuf->appendf( "color=%d\n", (int)_->sunColor.toSrgbInt() );
-            outBuf->appendf( "offset=%d:%d\n", _->offset.x(), _->offset.y() );
-            outBuf->appendf( "grid_size=%d:%d\n", _->gridSize[0], _->gridSize[1] );
-            outBuf->appendf( "grid_count=%d:%d\n", _->gridCount[0], _->gridCount[1] );
-            outBuf->appendf( "sun_rotation=%f:%f\n", _->sunRotation.theta, _->sunRotation.phi );
-            outBuf->appendf( "draw_style=%d\n", _->compressPrec );
-            outBuf->appendf( "sun_intensity=%f\n", _->sunIntensity );
-            for( auto& [color, active]: _->strataColorPerHeight )
-            {
-                if( active )
-                {
-                    outBuf->appendf( "strata_color=%d:%d:%d\n", (int)color[0].toSrgbAlphaInt(),
-                                     (int)color[1].toSrgbAlphaInt(), (int)color[2].toSrgbAlphaInt() );
-                }
-            }
-        };
-        editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
-            if( strcmp( name, "Settings" ) == 0 )
-            {
-                return handler->UserData;
-            }
-
-            return nullptr;
-        };
-        editorSettings.ReadLineFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, void* entry,
-                                        const char* line ) {
-            auto* _ = (EditableHeightmap*)handler->UserData;
-
-            sscanf( line, "frequency=%f", &_->frequency );
-            sscanf( line, "heightmap_multiplier=%f", &_->heightMultiplier );
-            sscanf( line, "seed=%d", &_->seed );
-            sscanf( line, "offset=%d:%d", &_->offset.x(), &_->offset.y() );
-            sscanf( line, "grid_size=%d:%d", &_->gridSize[0], &_->gridSize[1] );
-            sscanf( line, "grid_count=%d:%d", &_->gridCount[0], &_->gridCount[1] );
-            sscanf( line, "sun_rotation=%f:%f", &_->sunRotation.theta, &_->sunRotation.phi );
-            sscanf( line, "draw_style=%d", &_->compressPrec );
-            sscanf( line, "sun_intensity=%f", &_->sunIntensity );
-
-            int i     = 0;
-            int cl[3] = { 0 };
-            if( sscanf( line, "color=%d", &i ) == 1 )
-            {
-                _->sunColor = Color3::fromSrgb( i );
-            }
-            else if( sscanf( line, "strata_color=%d:%d:%d", &cl[0], &cl[1], &cl[2] ) == 3 )
-            {
-                _->strataColorPerHeight.emplace_back( Color4x3 { Color4::fromSrgbAlpha( cl[0] ),
-                                                                 Color4::fromSrgbAlpha( cl[1] ),
-                                                                 Color4::fromSrgbAlpha( cl[2] ) },
-                                                      true );
-            }
-        };
-        ImGuiExtra::AddOrReplaceSettingsHandler( editorSettings );
     }
 
 } // namespace Magnum

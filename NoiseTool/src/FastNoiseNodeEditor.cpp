@@ -771,23 +771,13 @@ void FastNoiseNodeEditor::DrawEditor( bool locked )
     {
         auto newSize = ImGui::GetWindowSize();
 
-        ImGui::PushItemWidth( 82.0f );
-
-
-        if( ImGui::InputText( "Name", &mNoiseTexture.GetName(), ImGuiInputTextFlags_CharsNoBlank ) )
-        {
-        }
-
-        ImGui::SameLine();
-        Magnum::ToggleButton( ICON_FA_EYE, mEnableTexPreview, ImVec2( 20, 20 ), "Show texture preview" );
-
-
-        ImGui::PopItemWidth();
-
 
         ImNodes::BeginNodeEditor();
 
         DoHelp();
+        ImGui::SameLine();
+
+        Magnum::ToggleButton( ICON_FA_EYE, mEnableTexPreview, ImVec2( 40, 40 ), "Show texture preview", 2 );
 
         DoContextMenu();
 
@@ -825,7 +815,6 @@ void FastNoiseNodeEditor::BeginDraw()
 
 void FastNoiseNodeEditor::EndDraw()
 {
-    mRegenreateTextures = false;
 }
 
 void FastNoiseNodeEditor::CheckLinks()
@@ -958,7 +947,7 @@ void FastNoiseNodeEditor::AddHistoryRecord()
     auto find = mNodes.find( mSelectedNode );
     if( find != mNodes.end() )
     {
-        auto name = mNoiseTexture.GetName();
+        auto name = Settings::get().name();
         if( name.empty() )
             name = "?";
         mHistory.emplace_back( std::move( name ), find->second.serialised );
@@ -1113,7 +1102,7 @@ void FastNoiseNodeEditor::DoNodes()
 
     for( auto& node: mNodes )
     {
-        bool        edited = mRegenreateTextures;
+        bool        edited = Settings::get().versionCheck_edit( mVersion );
         auto const& style  = gStyles[mNodeStyles[node.first->metadata->id]];
 
         ImNodes::PushColorStyle( ImNodesCol_TitleBar, ImGui::GetColorU32( style.title ) );
@@ -1130,7 +1119,7 @@ void FastNoiseNodeEditor::DoNodes()
         ImGui::PushStyleColor( ImGuiCol_ButtonActive, style.textColor );
 
         if( Magnum::ToggleButton( toggled ? ICON_FA_LOCATION_DOT : ICON_FA_LOCATION_CROSSHAIRS, toggled,
-                                  ImVec2( 32, 32 ), "Preview this node" ) &&
+                                  ImVec2( 20, 20 ), "Preview this node" ) &&
             toggled )
             ChangeSelectedNode( node.first );
 
@@ -1359,10 +1348,11 @@ void FastNoiseNodeEditor::DoNodes()
 
         Vector2 noiseSize = { (float)Node::NoiseSize, (float)Node::NoiseSize };
 
+        if( !node.second.hasTexture || edited )
+            node.second.GeneratePreview( true );
+
         if( mEnableTexPreview )
         {
-            if( !node.second.hasTexture || edited )
-                node.second.GeneratePreview( true );
             ImGuiIntegration::image( node.second.noiseTexture, noiseSize );
         }
 
@@ -1587,9 +1577,10 @@ FastNoise::SmartNode<> FastNoiseNodeEditor::GenerateSelectedPreview()
 FastNoise::OutputMinMax FastNoiseNodeEditor::GenerateNodePreviewNoise( FastNoise::Generator* gen,
                                                                        FastNoise::Buffer&    noise )
 {
+
     FastNoise::GeneratorInput context( noise );
-    context.frequency   = mMeshNoisePreview.GetFrequency();
-    context.seed        = mMeshNoisePreview.GetSeed();
+    context.frequency   = Settings::get().frequency();
+    context.seed        = Settings::get().seed();
     context.size[0]     = Node::NoiseSize;
     context.size[1]     = Node::NoiseSize;
     context.gridSize[0] = Node::NoiseSize - 1;
@@ -1635,8 +1626,7 @@ void FastNoiseNodeEditor::ChangeSelectedNode( FastNoise::NodeData* newId )
 
     if( generator )
     {
-        mMeshNoisePreview.SetGenerator( generator );
-        mNoiseTexture.SetGenerator( generator );
+        Settings::get().generator( generator );
     }
 }
 

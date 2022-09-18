@@ -17,6 +17,7 @@
 #include "EditableHieghtmap.h"
 #include "FastNoise/ImageData.h"
 #include "NoiseTexture.h"
+#include "Settings.h"
 #include "ToolWindow.h"
 
 namespace Magnum
@@ -54,39 +55,9 @@ namespace Magnum
 
         static const char* GetSIMDLevelName( FastSIMD::eLevel lvl );
 
-        Vector2i GetMeshGridSize() const
+        auto GetMinMax()
         {
-            return mMeshNoisePreview.GetGridSize();
-        }
-
-        void ResetOffsets()
-        {
-            mMeshNoisePreview.ResetOffsets();
-        }
-
-        Vector2 GetCenter() const
-        {
-            return mMeshNoisePreview.GetCenter();
-        }
-
-        Vector2 GetOffset() const
-        {
-            return mMeshNoisePreview.GetOffset();
-        }
-
-        float GetFrequency() const
-        {
-            return mMeshNoisePreview.GetFrequency();
-        }
-
-        float GetSeed() const
-        {
-            return mMeshNoisePreview.GetSeed();
-        }
-
-        void SetEdited()
-        {
-            mRegenreateTextures = true;
+            return mMeshNoisePreview.GetMinMax();
         }
 
     private:
@@ -215,9 +186,8 @@ namespace Magnum
 
         std::string mLastImportImagePath;
 
-        bool mImportNodeModal    = false;
-        bool mEnableTexPreview   = false;
-        bool mRegenreateTextures = false;
+        bool mImportNodeModal  = false;
+        bool mEnableTexPreview = false;
 
         EditableHeightmap mMeshNoisePreview;
         NoiseTexture      mNoiseTexture;
@@ -233,6 +203,7 @@ namespace Magnum
         FastNoise::ImageDataView mSelectedImage;
         History                  mHistory;
 
+        Settings::version      mVersion;
         std::vector<NodeStyle> mNodeStyles;
     };
 } // namespace Magnum
