@@ -47,7 +47,7 @@ NoiseTexture::~NoiseTexture()
     // mWorkerThread.join();
 }
 
-void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
+void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
 {
     if( mTexData.valid() )
     {
@@ -62,8 +62,8 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
         texData.Free();
     }
 
-    bool regen    = false;
-    auto GridSize = iParent->GetMeshGridSize();
+    bool regen    = mRegenerate;
+    auto GridSize = iParent.GetMeshGridSize();
     if( GridSize != mBuildData.gridSize )
     {
         regen                     = true;
@@ -83,24 +83,21 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
 
         Vector2i texSize = { mBuildData.size.x(), mBuildData.size.y() };
 
-        if( ImGui::DragInt2( ICON_FA_HAND, texSize.data(), 2, 4, 8192 ) )
         {
-            ImVec2 delta( Vector2 { texSize - mBuildData.size } );
+            auto seed = iParent.GetSeed();
+            if( seed != mBuildData.seed )
+            {
+                mBuildData.seed = seed;
+                edited          = true;
+            }
 
-            ImVec2 windowSize = ImGui::GetWindowSize();
-
-            windowSize += delta;
-            contentSize += delta;
-
-            ImGui::SetWindowSize( windowSize );
+            auto freq = iParent.GetSeed();
+            if( freq != mBuildData.frequency )
+            {
+                mBuildData.frequency = freq;
+                edited               = true;
+            }
         }
-        ImGui::SameLine();
-
-        edited |= ImGui::DragInt( "Seed", &mBuildData.seed );
-        ImGui::SameLine();
-
-        edited |= ImGui::DragFloat( "Frequency", &mBuildData.frequency, 0.001f );
-
 
         auto exportProg = mExportProgress.load();
         if( exportProg > 0 )
@@ -126,8 +123,7 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
             mExportBuildData = mBuildData;
             ImGui::OpenPopup( "Export PNG" );
             mStatus = "Exporting PNG terrain data";
-            if( iParent )
-                iParent->AddHistoryRecord();
+            iParent.AddHistoryRecord();
         }
 
         /*
@@ -191,8 +187,9 @@ void NoiseTexture::Draw( FastNoiseNodeEditor* iParent )
         auto ImagePos    = ImGui::GetCursorScreenPos();
         auto RelImagePos = ImGui::GetCursorPos();
 
-        ImGuiIntegration::imageButton( mNoiseTexture, Vector2( mNoiseTexture.imageSize( 0 ) ),
-                                       { { 0.0f, 1.0f }, Vector2 { 1.0f, 0.0f } }, 0 );
+        if( mHasTexture )
+            ImGuiIntegration::imageButton( mNoiseTexture, Vector2( mNoiseTexture.imageSize( 0 ) ),
+                                           { { 0.0f, 1.0f }, Vector2 { 1.0f, 0.0f } }, 0 );
         ImGui::PopStyleColor( 3 );
 
         ImDrawList* DrawList = ImGui::GetWindowDrawList();
@@ -414,18 +411,23 @@ void NoiseTexture::SetPreviewTexture( ImageView2D& imageView )
 
 void NoiseTexture::ReGenerate( FastNoise::SmartNodeArg<> generator )
 {
+    if( !generator )
+        return;
     mBuildData.generator = generator;
     mBuildData.iteration++;
 
     if( mBuildData.size.x() > 0 && mBuildData.size.y() > 0 && generator )
     {
 
-        mTexData = std::async( std::launch::async, [buildData = mBuildData, this]() -> TextureData {
+        mTexData    = std::async( std::launch::async, [buildData = mBuildData, this]() -> TextureData {
             return BuildTexture<FastNoise::ConvertRGBA8>(
                 buildData.generator, buildData.iteration, buildData.texBuffer, buildData.gridSize, buildData.size,
                 Vector2i( buildData.offset ), buildData.frequency, buildData.seed );
         } );
+        mHasTexture = true;
     }
+
+    mRegenerate = false;
 }
 
 template<typename Wrapper>

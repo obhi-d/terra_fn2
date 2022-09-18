@@ -1,8 +1,11 @@
 #include "EditableHieghtmap.h"
+
 #include "IconsFontAwesome6.h"
 #include "ImGuiExtra.h"
 #include "ImGuiUtils.h"
 #include "Utils.h"
+
+#include "FastNoiseNodeEditor.h"
 
 namespace Magnum
 {
@@ -111,7 +114,7 @@ namespace Magnum
         minMax = ctx.minMax;
     }
 
-    void EditableHeightmap::Draw( const Matrix4& transformation, const Matrix4& projection,
+    void EditableHeightmap::Draw( FastNoiseNodeEditor& editor, const Matrix4& transformation, const Matrix4& projection,
                                   const Vector3& cameraPosition )
     {
         if( !generator )
@@ -127,6 +130,8 @@ namespace Magnum
 
         edited |= ImGui::DragInt( "Seed", &seed );
         edited |= ImGui::DragFloat( "Frequency", &frequency, 0.0005f, 0, 0, "%.4f" );
+        if( edited )
+            editor.SetEdited();
         edited |= ImGui::DragInt2( "Grid Count", gridCount.data(), 1, 1, 20 );
         edited |= ImGui::DragInt2( "Grid Size", gridSize.data(), 1, 2, std::numeric_limits<int>::max() );
         edited |= ImGui::DragInt2( "Offset", offset.data() );

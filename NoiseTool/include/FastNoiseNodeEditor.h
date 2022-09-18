@@ -37,9 +37,12 @@ namespace Magnum
     {
     public:
         FastNoiseNodeEditor();
+        void BeginDraw();
         void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition );
         void DrawEditor( bool locked );
         void DrawTexture();
+        void EndDraw();
+
         void SetSIMDLevel( FastSIMD::eLevel lvl );
         void AddHistoryRecord();
         void UpdateSelected();
@@ -69,6 +72,21 @@ namespace Magnum
         Vector2 GetOffset() const
         {
             return mMeshNoisePreview.GetOffset();
+        }
+
+        float GetFrequency() const
+        {
+            return mMeshNoisePreview.GetFrequency();
+        }
+
+        float GetSeed() const
+        {
+            return mMeshNoisePreview.GetSeed();
+        }
+
+        void SetEdited()
+        {
+            mRegenreateTextures = true;
         }
 
     private:
@@ -197,8 +215,9 @@ namespace Magnum
 
         std::string mLastImportImagePath;
 
-        bool mImportNodeModal  = false;
-        bool mEnableTexPreview = false;
+        bool mImportNodeModal    = false;
+        bool mEnableTexPreview   = false;
+        bool mRegenreateTextures = false;
 
         EditableHeightmap mMeshNoisePreview;
         NoiseTexture      mNoiseTexture;
@@ -207,9 +226,6 @@ namespace Magnum
         Node                 mOverheadNode;
         int32_t              mNodeBenchmarkIndex = 0;
         int32_t              mNodeBenchmarkMax   = 128;
-
-        float mNodeFrequency = 0.02f;
-        int   mNodeSeed      = 1337;
 
         FastSIMD::eLevel mMaxSIMDLevel    = FastSIMD::Level_Null;
         FastSIMD::eLevel mActualSIMDLevel = FastSIMD::Level_Null;

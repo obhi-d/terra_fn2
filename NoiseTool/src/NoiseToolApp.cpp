@@ -43,7 +43,7 @@ NoiseToolApp::NoiseToolApp( const Arguments& arguments ) :
     const Vector2 size = Vector2 { windowSize() } / dpiScaling();
 
     auto& io                 = ImGui::GetIO();
-    io.IniFilename           = "NoiseTool.ini";
+    io.IniFilename           = "Terra.ini";
     mImGuiIntegrationContext = ImGuiIntegration::Context( *mImGuiContextMain, size, windowSize(), framebufferSize() );
     std::memset( io.KeyMap, -1, sizeof( io.KeyMap ) );
 
@@ -136,6 +136,8 @@ void NoiseToolApp::drawEvent()
 
     mImGuiIntegrationContext.newFrame();
 
+    mNodeEditor.BeginDraw();
+
     // Update camera pos
     Vector3 cameraVelocity( 0 );
     if( mKeyDown[Key_W] || mKeyDown[Key_Up] )
@@ -184,7 +186,7 @@ void NoiseToolApp::drawEvent()
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::DockSpaceOverViewport( viewport, ImGuiDockNodeFlags_PassthruCentralNode );
     bool setEditorRect = false;
-    if( ImGui::Begin( "Parameters" ) )
+    if( ImGui::Begin( "Settings" ) )
     {
         if( Magnum::Button( ICON_FA_RECYCLE, "Reset all states." ) )
         {
@@ -226,6 +228,26 @@ void NoiseToolApp::drawEvent()
 
         ImGui::SameLine();
 
+        if( Magnum::Button( ICON_FA_BULLSEYE, "Reset heightmap offsets" ) )
+        {
+            mNodeEditor.ResetOffsets();
+        }
+
+        ImGui::SameLine();
+
+        if( Magnum::Button( ICON_FA_CROSSHAIRS, "Reset camera" ) )
+        {
+            recomputeCamera();
+        }
+
+        ImGui::SameLine();
+
+        Magnum::ToggleButton( ICON_FA_IMAGE, mShowTexturePreview, ImVec2( 20, 20 ),
+                              mShowTexturePreview ? "Hide texture preview" : "Show texture preview" );
+
+        ImGui::Text( "Rendering" );
+        ImGui::Separator();
+
         if( ImGui::ColorEdit3( "", mClearColor.data(), ImGuiColorEditFlags_::ImGuiColorEditFlags_NoInputs ) )
             GL::Renderer::setClearColor( mClearColor );
 
@@ -234,23 +256,16 @@ void NoiseToolApp::drawEvent()
         Magnum::ToggleButton( ICON_FA_CUBE, mBackFaceCulling, ImVec2( 20, 20 ),
                               mBackFaceCulling ? "Disable backface culling" : "Enable backface culling" );
 
-
         ImGui::SameLine();
 
-        if( Magnum::Button( ICON_FA_BULLSEYE, "Reset heightmap offsets" ) )
+        Magnum::ToggleButton( ICON_FA_CLOCK, mShowFPS, ImVec2( 20, 20 ),
+                              mShowFPS ? "Hide time taken by a frame" : "Show time taken by a frame" );
+
+        if( mShowFPS )
         {
-            mNodeEditor.ResetOffsets();
+            ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
+                         Double( ImGui::GetIO().Framerate ) );
         }
-
-        ImGui::SameLine();
-
-        if( Magnum::Button( ICON_FA_CAMERA, "Reset camera" ) )
-        {
-            recomputeCamera();
-        }
-
-        ImGui::Text( "Application average %.3f ms/frame (%.1f FPS)", 1000.0 / Double( ImGui::GetIO().Framerate ),
-                     Double( ImGui::GetIO().Framerate ) );
     }
 
     mNodeEditor.Draw( mCamera.cameraMatrix(), mCamera.projectionMatrix(),
@@ -259,13 +274,17 @@ void NoiseToolApp::drawEvent()
 
     ImGui::End();
 
+    if( mShowTexturePreview )
+    {
+        mNodeEditor.DrawTexture();
+    }
+
     auto endMainWindow = [this]() {
         mImGuiIntegrationContext.updateApplicationCursor( *this );
         mImGuiIntegrationContext.drawFrame();
         swapBuffers();
     };
 
-    mNodeEditor.DrawTexture();
 
     /* Set appropriate states. If you only draw ImGui, it is sufficient to
        just enable blending and scissor test in the constructor. */
@@ -273,7 +292,6 @@ void NoiseToolApp::drawEvent()
     GL::Renderer::enable( GL::Renderer::Feature::ScissorTest );
     GL::Renderer::disable( GL::Renderer::Feature::DepthTest );
     GL::Renderer::disable( GL::Renderer::Feature::FaceCulling );
-
 
     if( mExternalNodeEditor )
     {
@@ -309,7 +327,7 @@ void NoiseToolApp::drawEvent()
     redraw();
 
     mNodeEditor.UpdateSelected();
-
+    mNodeEditor.EndDraw();
     /* Reset state. Only needed if you want to draw something else with
        different state after. */
     GL::Renderer::enable( GL::Renderer::Feature::DepthTest );

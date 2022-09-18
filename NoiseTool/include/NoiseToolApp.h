@@ -87,5 +87,7 @@ namespace Magnum
         bool                        mBackFaceCulling    = false;
         bool                        mSkipDraw           = false;
         bool                        mExternalNodeEditor = true;
+        bool                        mShowTexturePreview = true;
+        bool                        mShowFPS            = false;
     };
 } // namespace Magnum

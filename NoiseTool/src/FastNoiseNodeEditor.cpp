@@ -378,9 +378,10 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
 {
     FastNoise::ImageData::Importer = Import;
     ImGuiSettingsHandler nodeSettings;
-    nodeSettings.TypeName   = "NoiseToolNodeData";
-    nodeSettings.TypeHash   = ImHashStr( nodeSettings.TypeName );
-    nodeSettings.UserData   = this;
+    nodeSettings.TypeName = "NoiseToolNodeData";
+    nodeSettings.TypeHash = ImHashStr( nodeSettings.TypeName );
+    nodeSettings.UserData = this;
+
     nodeSettings.WriteAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, ImGuiTextBuffer* outBuf ) {
         auto* nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
 
@@ -440,6 +441,11 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             if( find != nodeEditor->mNodes.end() )
             {
                 ImNodes::SetNodeGridSpacePos( find->second.nodeId, imVec2 );
+            }
+
+            if( nodeEditor->mNodes.size() <= 1 )
+            {
+                nodeEditor->ChangeSelectedNode( nodeData );
             }
         }
         else if( sscanf( line, "variable=%d", &i ) == 1 )
@@ -612,9 +618,6 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
 
         ImVec2 gridOffset = ImNodes::EditorContextGetPanning();
         outBuf->appendf( "grid_offset=%f:%f\n", gridOffset.x, gridOffset.y );
-
-        outBuf->appendf( "frequency=%f\n", nodeEditor->mNodeFrequency );
-        outBuf->appendf( "seed=%d\n", nodeEditor->mNodeSeed );
         outBuf->appendf( "image_path=%s\n", nodeEditor->mLastImportImagePath.c_str() );
         outBuf->appendf( "texure_preview=%c\n", (char)nodeEditor->mEnableTexPreview );
         outBuf->appendf( "selected_image=%d\n", nodeEditor->mSelectedImage.index );
@@ -636,8 +639,6 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             ImNodes::EditorContextResetPanning( imVec2 );
         }
 
-        sscanf( line, "frequency=%f", &nodeEditor->mNodeFrequency );
-        sscanf( line, "seed=%d", &nodeEditor->mNodeSeed );
         sscanf( line, "texure_preview=%c", (char*)&nodeEditor->mEnableTexPreview );
         sscanf( line, "selected_image=%d\n", &nodeEditor->mSelectedImage.index );
         std::string_view l( line );
@@ -770,16 +771,8 @@ void FastNoiseNodeEditor::DrawEditor( bool locked )
     {
         auto newSize = ImGui::GetWindowSize();
 
-        bool edited = false;
         ImGui::PushItemWidth( 82.0f );
 
-        edited |= ImGui::DragInt( "Seed", &mNodeSeed );
-        ImGui::SameLine();
-        edited |= ImGui::DragFloat( "Frequency", &mNodeFrequency, 0.001f );
-        ImGui::SameLine();
-
-
-        ImGui::SameLine();
 
         if( ImGui::InputText( "Name", &mNoiseTexture.GetName(), ImGuiInputTextFlags_CharsNoBlank ) )
         {
@@ -791,15 +784,6 @@ void FastNoiseNodeEditor::DrawEditor( bool locked )
 
         ImGui::PopItemWidth();
 
-        if( edited )
-        {
-            for( auto& node: mNodes )
-            {
-                node.second.GeneratePreview( false );
-            }
-
-            ImGuiExtra::MarkSettingsDirty();
-        }
 
         ImNodes::BeginNodeEditor();
 
@@ -820,7 +804,7 @@ void FastNoiseNodeEditor::DrawEditor( bool locked )
 
 void Magnum::FastNoiseNodeEditor::DrawTexture()
 {
-    mNoiseTexture.Draw( this );
+    mNoiseTexture.Draw( *this );
 }
 
 void FastNoiseNodeEditor::Draw( const Matrix4& transformation, const Matrix4& projection,
@@ -829,10 +813,19 @@ void FastNoiseNodeEditor::Draw( const Matrix4& transformation, const Matrix4& pr
     //  const ImGuiViewport* viewport = ImGui::GetMainViewport();
     //  ImGui::DockSpaceOverViewport( viewport, ImGuiDockNodeFlags_PassthruCentralNode );
 
-    mMeshNoisePreview.Draw( transformation, projection, cameraPosition );
+    mMeshNoisePreview.Draw( *this, transformation, projection, cameraPosition );
 
     DoImages();
     DoHistory();
+}
+
+void FastNoiseNodeEditor::BeginDraw()
+{
+}
+
+void FastNoiseNodeEditor::EndDraw()
+{
+    mRegenreateTextures = false;
 }
 
 void FastNoiseNodeEditor::CheckLinks()
@@ -1120,7 +1113,8 @@ void FastNoiseNodeEditor::DoNodes()
 
     for( auto& node: mNodes )
     {
-        auto const& style = gStyles[mNodeStyles[node.first->metadata->id]];
+        bool        edited = mRegenreateTextures;
+        auto const& style  = gStyles[mNodeStyles[node.first->metadata->id]];
 
         ImNodes::PushColorStyle( ImNodesCol_TitleBar, ImGui::GetColorU32( style.title ) );
         ImNodes::PushColorStyle( ImNodesCol_TitleBarHovered, ImGui::GetColorU32( style.titleHovered ) );
@@ -1223,7 +1217,7 @@ void FastNoiseNodeEditor::DoNodes()
                     *node.second.data = std::move( newData );
                 }
 
-                node.second.GeneratePreview( true );
+                edited = true;
             }
 
             ImGui::EndPopup();
@@ -1263,7 +1257,7 @@ void FastNoiseNodeEditor::DoNodes()
 
             if( ImGui::DragFloat( formatName.c_str(), &nodeData->hybrids[i].second, 0.02f, 0, 0, floatFormat ) )
             {
-                node.second.GeneratePreview( true );
+                edited = true;
             }
 
             if( isLinked )
@@ -1293,7 +1287,7 @@ void FastNoiseNodeEditor::DoNodes()
                 if( ImGui::DragFloat( formatName.c_str(), &nodeData->variables[i].f, 0.02f, nodeVar.valueMin.f,
                                       nodeVar.valueMax.f ) )
                 {
-                    node.second.GeneratePreview( true );
+                    edited = true;
                 }
             }
             break;
@@ -1301,7 +1295,7 @@ void FastNoiseNodeEditor::DoNodes()
             {
                 if( ImGui::Checkbox( formatName.c_str(), &nodeData->variables[i].b ) )
                 {
-                    node.second.GeneratePreview( true );
+                    edited = true;
                 }
             }
             break;
@@ -1310,7 +1304,7 @@ void FastNoiseNodeEditor::DoNodes()
                 if( ImGui::DragInt( formatName.c_str(), &nodeData->variables[i].i, 0.2f, nodeVar.valueMin.i,
                                     nodeVar.valueMax.i ) )
                 {
-                    node.second.GeneratePreview( true );
+                    edited = true;
                 }
             }
             break;
@@ -1320,7 +1314,7 @@ void FastNoiseNodeEditor::DoNodes()
                                   (int)nodeVar.enumNames.size() ) ||
                     ImGuiExtra::ScrollCombo( &nodeData->variables[i].i, (int)nodeVar.enumNames.size() ) )
                 {
-                    node.second.GeneratePreview( true );
+                    edited = true;
                 }
             }
             break;
@@ -1338,7 +1332,7 @@ void FastNoiseNodeEditor::DoNodes()
             if( ImGui::Button( ICON_FA_IMAGE ) )
             {
                 nodeData->images[i].index = mSelectedImage.index;
-                node.second.GeneratePreview( true );
+                edited                    = true;
             }
             auto const& image = nodeData->images[i].toImage();
             ImGui::SameLine();
@@ -1355,7 +1349,7 @@ void FastNoiseNodeEditor::DoNodes()
             auto&       curve   = nodeData->curves[i];
             if( ImGui::DrawCurveEditor( nodeVar.name, curve ) )
             {
-                node.second.GeneratePreview( true );
+                edited = true;
             }
         }
 
@@ -1364,15 +1358,10 @@ void FastNoiseNodeEditor::DoNodes()
         ImNodes::BeginOutputAttribute( node.second.GetOutputAttributeId(), ImNodesPinShape_QuadFilled );
 
         Vector2 noiseSize = { (float)Node::NoiseSize, (float)Node::NoiseSize };
-        // if( mSelectedNode == node.first && !node.second.serialised.empty() )
-        // {
-        //  ImVec2 cursorPos = ImGui::GetCursorScreenPos();
-        //  ImGui::RenderFrame( cursorPos - ImVec2( 1, 1 ), cursorPos + ImVec2( noiseSize ) + ImVec2( 1, 1 ),
-        // IM_COL32( 255, 0, 0, 200 ), false );
-        //  }
+
         if( mEnableTexPreview )
         {
-            if( !node.second.hasTexture )
+            if( !node.second.hasTexture || edited )
                 node.second.GeneratePreview( true );
             ImGuiIntegration::image( node.second.noiseTexture, noiseSize );
         }
@@ -1413,7 +1402,7 @@ FastNoiseNodeEditor::Node& FastNoiseNodeEditor::AddNode( ImVec2 startPos, const 
 
     ImNodes::SetNodeScreenSpacePos( newNode.first->second.nodeId, startPos );
 
-    if( mNodes.size() == 1 )
+    if( mNodes.size() <= 1 )
     {
         ChangeSelectedNode( nodeData );
     }
@@ -1496,24 +1485,12 @@ void FastNoiseNodeEditor::DoContextMenu()
             AddNode( mContextStartPos, newMetadata );
         }
 
-        if( ImGui::BeginMenu( "Import" ) )
+        if( ImGui::MenuItem( ICON_FA_FILE_IMPORT " Import Tree" ) )
         {
-            if( ImGui::MenuItem( "Encoded Node Tree" ) )
-            {
-                openImportModal = true;
-            }
-            ImGui::Separator();
-            for( size_t i = 0; i < sizeof( gDemoNodeTrees ) / sizeof( gDemoNodeTrees[0] ); i++ )
-            {
-                if( ImGui::MenuItem( gDemoNodeTrees[i][0] ) )
-                {
-                    AddNodeFromEncodedString( gDemoNodeTrees[i][1], mContextStartPos );
-                }
-            }
-
-            ImGui::EndMenu();
+            openImportModal = true;
         }
-        if( ImGui::MenuItem( ICON_FA_PASTE " Copied Node" ) )
+
+        if( ImGui::MenuItem( ICON_FA_PASTE " Paste Tree" ) )
         {
             AddNodeFromEncodedString( ImGui::GetClipboardText(), mContextStartPos );
         }
@@ -1604,8 +1581,6 @@ FastNoise::SmartNode<> FastNoiseNodeEditor::GenerateSelectedPreview()
         }
     }
 
-    mNoiseTexture.ReGenerate( generator );
-
     return generator;
 }
 
@@ -1613,8 +1588,8 @@ FastNoise::OutputMinMax FastNoiseNodeEditor::GenerateNodePreviewNoise( FastNoise
                                                                        FastNoise::Buffer&    noise )
 {
     FastNoise::GeneratorInput context( noise );
-    context.frequency   = mNodeFrequency;
-    context.seed        = mNodeSeed;
+    context.frequency   = mMeshNoisePreview.GetFrequency();
+    context.seed        = mMeshNoisePreview.GetSeed();
     context.size[0]     = Node::NoiseSize;
     context.size[1]     = Node::NoiseSize;
     context.gridSize[0] = Node::NoiseSize - 1;
@@ -1661,6 +1636,7 @@ void FastNoiseNodeEditor::ChangeSelectedNode( FastNoise::NodeData* newId )
     if( generator )
     {
         mMeshNoisePreview.SetGenerator( generator );
+        mNoiseTexture.SetGenerator( generator );
     }
 }
 

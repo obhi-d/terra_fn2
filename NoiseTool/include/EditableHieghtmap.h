@@ -22,12 +22,14 @@
 
 namespace Magnum
 {
+    class FastNoiseNodeEditor;
     class EditableHeightmap
     {
     public:
         EditableHeightmap();
 
-        void Draw( const Matrix4& transformation, const Matrix4& projection, const Vector3& cameraPosition );
+        void Draw( FastNoiseNodeEditor& editor, const Matrix4& transformation, const Matrix4& projection,
+                   const Vector3& cameraPosition );
         void SetGenerator( FastNoise::SmartNode<const FastNoise::Generator> generator )
         {
             this->generator = generator;
@@ -52,6 +54,16 @@ namespace Magnum
         Vector2 GetOffset() const
         {
             return Vector2( offset );
+        }
+
+        float GetFrequency() const
+        {
+            return frequency;
+        }
+
+        float GetSeed() const
+        {
+            return seed;
         }
 
         void ResetOffsets();

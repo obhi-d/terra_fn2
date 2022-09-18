@@ -143,24 +143,25 @@ set_target_properties(FastNoise
 
 # Bundle a better font
 # Configure resource file for imgui source dir variable
-set(NoiseTool_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-configure_file("resources.conf" "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
+set(NoiseTool_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+configure_file("resources/resources.conf" "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
 corrade_add_resource(NoiseTool_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
 
 add_executable(Terra
-    "NoiseToolApp.cpp"
-    "FastNoiseNodeEditor.cpp"
-    "NoiseTexture.cpp"
+    "src/NoiseToolApp.cpp"
+    "src/FastNoiseNodeEditor.cpp"
+    "src/NoiseTexture.cpp"
     "${imnodes_SOURCE_DIR}/imnodes.cpp"
     ${NoiseTool_RESOURCES}
     "${NoiseTool_RESOURCES_DIR}/icon.rc"
-    "ImGuiFileDialog.cpp"
-    "EditableHeightmap.cpp" 
-    "ToolWindow.cpp"
-    "Worker.cpp") 
+    "src/ImGuiFileDialog.cpp"
+    "src/EditableHeightmap.cpp" 
+    "src/ToolWindow.cpp"
+    "src/Worker.cpp") 
 
 # Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
 target_include_directories(Terra PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${imnodes_SOURCE_DIR}"
     "${libpng_SOURCE_DIR}"
     "${libpng_BINARY_DIR}")

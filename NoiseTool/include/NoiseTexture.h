@@ -27,7 +27,12 @@ namespace Magnum
         NoiseTexture();
         ~NoiseTexture();
 
-        void Draw( FastNoiseNodeEditor* iParent = nullptr );
+        void Draw( FastNoiseNodeEditor& iParent );
+        void SetGenerator( FastNoise::SmartNodeArg<> generator )
+        {
+            mBuildData.generator = generator;
+            mRegenerate          = true;
+        }
         void ReGenerate( FastNoise::SmartNodeArg<> generator );
         void SetName( std::string name )
         {
@@ -147,6 +152,8 @@ namespace Magnum
         void SetPreviewTexture( ImageView2D& imageView );
 
         bool mDisableGrid = false;
+        bool mRegenerate  = false;
+        bool mHasTexture  = false;
 
         std::string     mName           = "unnamed";
         std::atomic_int mExportProgress = 0;

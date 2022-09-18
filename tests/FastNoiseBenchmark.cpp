@@ -2,14 +2,14 @@
 #include "FastNoise/FastNoise.h"
 #include "FastNoise/Metadata.h"
 
-#include "../NoiseTool/DemoNodeTrees.inl"
 
 #include "magic_enum.h"
 
 static const size_t gPositionCount = 8192;
 static float        gPositionFloats[gPositionCount];
 
-FastNoise::SmartNode<> BuildGenerator( benchmark::State& state, const FastNoise::Metadata* metadata, FastSIMD::eLevel level )
+FastNoise::SmartNode<> BuildGenerator( benchmark::State& state, const FastNoise::Metadata* metadata,
+                                       FastSIMD::eLevel level )
 {
     FastNoise::SmartNode<> generator = metadata->CreateNode( level );
 
@@ -78,7 +78,8 @@ void BenchFastNoiseGenerator3D( benchmark::State& state, const FastNoise::SmartN
     for( auto _: state )
     {
         (void)_;
-        // generator->GenPositionArray3D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0, 0, seed++ );
+        // generator->GenPositionArray3D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0,
+        // 0, seed++ );
         totalData += gPositionCount;
     }
 
@@ -98,7 +99,8 @@ void BenchFastNoiseGenerator4D( benchmark::State& state, const FastNoise::SmartN
     for( auto _: state )
     {
         (void)_;
-        // generator->GenPositionArray4D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats, gPositionFloats, 0, 0, 0, 0, seed++ );
+        // generator->GenPositionArray4D( data, gPositionCount, gPositionFloats, gPositionFloats, gPositionFloats,
+        // gPositionFloats, 0, 0, 0, 0, seed++ );
         totalData += gPositionCount;
     }
 
@@ -133,13 +135,16 @@ void RegisterBenchmarks( FastSIMD::eLevel level, const char* groupName, const ch
     benchName += name;
 
     benchName[0] = '4';
-    benchmark::RegisterBenchmark( benchName.c_str(), [=]( benchmark::State& st ) { BenchFastNoiseGenerator4D( st, generatorFunc( st ) ); } );
+    benchmark::RegisterBenchmark(
+        benchName.c_str(), [=]( benchmark::State& st ) { BenchFastNoiseGenerator4D( st, generatorFunc( st ) ); } );
 
     benchName[0] = '3';
-    benchmark::RegisterBenchmark( benchName.c_str(), [=]( benchmark::State& st ) { BenchFastNoiseGenerator3D( st, generatorFunc( st ) ); } );
+    benchmark::RegisterBenchmark(
+        benchName.c_str(), [=]( benchmark::State& st ) { BenchFastNoiseGenerator3D( st, generatorFunc( st ) ); } );
 
     benchName[0] = '2';
-    benchmark::RegisterBenchmark( benchName.c_str(), [=]( benchmark::State& st ) { BenchFastNoiseGenerator2D( st, generatorFunc( st ) ); } );
+    benchmark::RegisterBenchmark(
+        benchName.c_str(), [=]( benchmark::State& st ) { BenchFastNoiseGenerator2D( st, generatorFunc( st ) ); } );
 }
 
 int main( int argc, char** argv )
@@ -151,7 +156,8 @@ int main( int argc, char** argv )
         gPositionFloats[idx] = (float)idx * 0.6f;
     }
 
-    for( FastSIMD::eLevel level = FastSIMD::CPUMaxSIMDLevel(); level != FastSIMD::Level_Null; level = ( FastSIMD::eLevel )( level >> 1 ) )
+    for( FastSIMD::eLevel level = FastSIMD::CPUMaxSIMDLevel(); level != FastSIMD::Level_Null;
+         level                  = ( FastSIMD::eLevel )( level >> 1 ) )
     {
         if( !( level & FastSIMD::COMPILED_SIMD_LEVELS & FastNoise::SUPPORTED_SIMD_LEVELS ) )
         {
@@ -169,21 +175,8 @@ int main( int argc, char** argv )
 
             std::string nodeName = FastNoise::Metadata::FormatMetadataNodeName( metadata, false );
 
-            RegisterBenchmarks( level, groupName, nodeName.c_str(), [=]( benchmark::State& st ) { return BuildGenerator( st, metadata, level ); } );
-        }
-
-        for( const auto& nodeTree: gDemoNodeTrees )
-        {
-            RegisterBenchmarks( level, "Node Trees", nodeTree[0], [=]( benchmark::State& st ) {
-                FastNoise::SmartNode<> rootNode = FastNoise::NewFromEncodedNodeTree( nodeTree[1], level );
-
-                if( !rootNode )
-                {
-                    st.SkipWithError( "Could not generate node tree from encoded string" );
-                }
-
-                return rootNode;
-            } );
+            RegisterBenchmarks( level, groupName, nodeName.c_str(),
+                                [=]( benchmark::State& st ) { return BuildGenerator( st, metadata, level ); } );
         }
     }
 

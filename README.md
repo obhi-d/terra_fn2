@@ -23,9 +23,12 @@ The fork is focused on the Terra, a heightmap generator, rather than the actual 
 - [x] Random scale/rotate generator (per plane)
 - [ ] Node grouping into meta groups
 - [x] Add camera re-focus button
-- [ ] Fix typing speed bug in tool window
+- [x] Fix typing speed bug in tool window
 - [x] Fix random constant gen bug
 - [ ] A way to mark nodes as pass through
 - [ ] Select grid to export
 - [ ] Link Mesh parameters to texture parametrs (remove duplicates)
+- [ ] Grid names
+- [ ] Strata bound to grid by name/index
+- [ ] Generate per grid, grid id stored in Uniform
 ![NoiseTool](example/snapshot.png)
