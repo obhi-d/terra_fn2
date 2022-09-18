@@ -24,5 +24,8 @@ The fork is focused on the Terra, a heightmap generator, rather than the actual 
 - [ ] Node grouping into meta groups
 - [x] Add camera re-focus button
 - [ ] Fix typing speed bug in tool window
-- [ ] Fix random constant gen bug
+- [x] Fix random constant gen bug
+- [ ] A way to mark nodes as pass through
+- [ ] Select grid to export
+- [ ] Link Mesh parameters to texture parametrs (remove duplicates)
 ![NoiseTool](example/snapshot.png)
