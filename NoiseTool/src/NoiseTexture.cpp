@@ -92,6 +92,11 @@ void NoiseTexture::Draw( FastNoiseNodeEditor& iParent )
         {
             ImGui::OpenPopup( "Export PNG" );
             mStatus = "Exporting PNG terrain data";
+        }
+
+        ImGui::SameLine();
+        if( Magnum::Button( ICON_FA_FILE_CIRCLE_CHECK, "Quick export using saved settings as PNG" ) )
+        {
             DoExport( 0, 0 );
         }
 

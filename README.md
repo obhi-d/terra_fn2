@@ -27,7 +27,7 @@ The fork is focused on the Terra, a heightmap generator, rather than the actual 
 - [x] Fix random constant gen bug
 - [ ] A way to mark nodes as pass through
 - [ ] Select grid to export
-- [ ] Link Mesh parameters to texture parametrs (remove duplicates)
+- [x] Link Mesh parameters to texture parametrs (remove duplicates)
 - [ ] Grid names
 - [ ] Strata bound to grid by name/index
 - [ ] Generate per grid, grid id stored in Uniform

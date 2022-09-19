@@ -442,11 +442,6 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             {
                 ImNodes::SetNodeGridSpacePos( find->second.nodeId, imVec2 );
             }
-
-            if( nodeEditor->mNodes.size() <= 1 )
-            {
-                nodeEditor->ChangeSelectedNode( nodeData );
-            }
         }
         else if( sscanf( line, "variable=%d", &i ) == 1 )
         {
@@ -621,6 +616,11 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         outBuf->appendf( "image_path=%s\n", nodeEditor->mLastImportImagePath.c_str() );
         outBuf->appendf( "texure_preview=%c\n", (char)nodeEditor->mEnableTexPreview );
         outBuf->appendf( "selected_image=%d\n", nodeEditor->mSelectedImage.index );
+        auto selection = nodeEditor->mNodes.find( nodeEditor->mSelectedNode );
+        if( selection != nodeEditor->mNodes.end() )
+        {
+            outBuf->appendf( "selected_node=%d\n", selection->second.nodeId );
+        }
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -645,6 +645,19 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         if( l.starts_with( "image_path=" ) )
         {
             nodeEditor->mLastImportImagePath = l.substr( sizeof( "image_path" ) );
+        }
+
+        int selection = -1;
+        if( sscanf( line, "selected_node=%d\n", &selection ) == 1 )
+        {
+            for( auto& n: nodeEditor->mNodes )
+            {
+                if( n.second.nodeId == selection )
+                {
+                    nodeEditor->ChangeSelectedNode( n.first );
+                    break;
+                }
+            }
         }
     };
 
