@@ -1,0 +1,186 @@
+project(terra VERSION 0.0.1)
+
+CPMAddPackage(
+    NAME corrade
+    GITHUB_REPOSITORY mosra/corrade
+    GIT_TAG e6b4d952e757ab99a0b67e516235b7f91904dca0
+    GIT_SUBMODULES "src"
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "BUILD_STATIC ON"
+        "WITH_INTERCONNECT OFF"
+        "WITH_TESTSUITE OFF"
+)
+
+CPMAddPackage(
+    NAME SDL2
+    GITHUB_REPOSITORY libsdl-org/SDL
+    GIT_TAG release-2.24.0
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+      "SDL_ATOMIC OFF"
+      "SDL_CPUINFO OFF"
+      "SDL_FILE OFF"
+      "SDL_FILESYSTEM OFF"
+      "SDL_HAPTIC OFF"
+      "SDL_LOCALE OFF"
+      "SDL_POWER OFF"
+      "SDL_RENDER OFF"
+      "SDL_SENSOR OFF"
+      "SDL_THREADS ON"
+      "SDL_STATIC ON"
+      "SDL_SHARED OFF"
+)
+
+CPMAddPackage(
+    NAME magnum
+    GITHUB_REPOSITORY mosra/magnum
+    GIT_TAG fa00122fdb84eab23064d83c36d50757fdf899c1
+    GIT_SUBMODULES "src"
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "BUILD_STATIC ON"
+        "BUILD_PLUGINS_STATIC ON"
+        "WITH_SDL2APPLICATION OFF"
+        "WITH_GLFWAPPLICATION OFF"
+        "WITH_MESHTOOLS OFF"
+        "WITH_TRADE ON"
+        "WITH_TEXT OFF"
+        "WITH_TEXTURETOOLS OFF"
+)
+   
+CPMAddPackage(
+    NAME imgui
+    GITHUB_REPOSITORY ocornut/imgui
+    GIT_TAG aceab9a877de0258d19d29a5d87a51b63a8999bf
+    EXCLUDE_FROM_ALL YES
+)
+# Set dir for find_package(ImGui)
+set(IMGUI_DIR ${imgui_SOURCE_DIR})
+
+CPMAddPackage(
+    NAME magnum-plugins
+    GITHUB_REPOSITORY mosra/magnum-plugins
+    GIT_TAG 1c9d360aa21a3788f32b2d94ad45c39841702a39
+    GIT_SUBMODULES "src"
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "BUILD_STATIC ON"
+        "MAGNUM_WITH_STBIMAGEIMPORTER ON"
+        "MAGNUM_WITH_DDSIMPORTER ON"
+)
+
+CPMAddPackage(
+    NAME imnodes
+    GITHUB_REPOSITORY Auburn/imnodes
+    GIT_TAG 277fdd7a912e622a2476981fea14c68abcb6b3c8
+    GIT_SUBMODULES ".github"
+    EXCLUDE_FROM_ALL YES
+    DOWNLOAD_ONLY YES
+)
+
+CPMAddPackage(
+    NAME zlib
+    GITHUB_REPOSITORY madler/zlib
+    GIT_TAG 21767c654d31d2dccdde4330529775c6c5fd5389
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "BUILD_STATIC ON"
+        "BUILD_SHARED OFF"
+)
+
+set(ZLIB_INCLUDE_DIRS ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+set(ZLIB_INCLUDE_DIR ${zlib_SOURCE_DIR} ${zlib_BINARY_DIR})
+set(PNG_BUILD_ZLIB OFF CACHE BOOL "Custom zlib Location, else find_package is used")
+include_directories(ZLIB_INCLUDE_DIRS)
+
+CPMAddPackage(
+    NAME libpng
+    GITHUB_REPOSITORY glennrp/libpng
+    GIT_TAG 763c77e628e2c78b4c422bb7e26327d28ee54ad4
+    EXCLUDE_FROM_ALL YES
+    OPTIONS
+        "PNG_STATIC ON"
+        "PNG_SHARED OFF"
+        "PNG_EXECUTABLES OFF"
+        "PNG_TESTS OFF"
+)
+
+# Use modules from magnum-integration since it has everything we need
+
+# Bundle a better font
+# Configure resource file for imgui source dir variable
+set(terra_RESOURCES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/resources)
+configure_file("resources/resources.conf" "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
+corrade_add_resource(terra_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/resources.conf")
+
+add_executable(Terra
+    "src/TerraMainApp.cpp"
+    "src/NoiseNode.cpp" 
+    "src/imgui/ImguiTerraContext.cpp" 
+    "src/imgui/ImguiTerraWindow.cpp"
+) 
+
+find_package(Corrade REQUIRED Main)
+find_package(Magnum REQUIRED GL Trade Shaders)
+find_package(ImGui  REQUIRED SourcesMiscCpp)
+find_package(libpng REQUIRED)
+
+if(CORRADE_TARGET_APPLE)
+    find_package(Magnum REQUIRED CglContext)
+elseif(CORRADE_TARGET_UNIX)
+    find_package(Magnum REQUIRED GlxContext)
+elseif(CORRADE_TARGET_WINDOWS)
+    find_package(Magnum REQUIRED WglContext)
+else()
+    message(FATAL_ERROR "No context handler available on this platform")
+endif()
+
+set_directory_properties(PROPERTIES CORRADE_USE_PEDANTIC_FLAGS ON)
+
+# Include imnodes in NoiseTool project since setting up separate cmake library with imgui dependancy was causing issues
+target_include_directories(Terra PRIVATE 
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+    "${imnodes_SOURCE_DIR}"
+    "${libpng_SOURCE_DIR}"
+    "${libpng_BINARY_DIR}")
+
+target_link_libraries(Terra PRIVATE
+    Magnum::GL
+    Magnum::GLContext
+    Magnum::Magnum
+    Magnum::Shaders
+    Magnum::SceneGraph
+    Magnum::Trade
+    zlib
+    png_static
+    SDL2::SDL2
+    SDL2::SDL2main
+)
+target_compile_features(Terra PUBLIC cxx_std_20)
+add_dependencies(Terra MagnumPlugins::StbImageImporter MagnumPlugins::DdsImporter)
+# Windows HiDPI support
+if (WIN32)
+    target_sources(Terra PRIVATE WindowsHiDPI.manifest)
+endif()
+
+if (UNIX)
+    target_link_options(Terra PRIVATE -pthread)
+
+    if(APPLE)
+        set_property(TARGET Terra PROPERTY
+            INSTALL_RPATH "@loader_path/../lib")
+    else()
+        set_property(TARGET Terra PROPERTY
+            INSTALL_RPATH "\$ORIGIN/../lib")
+    endif()
+endif()
+
+if (MSVC)
+    target_compile_definitions(Terra PRIVATE _CRT_SECURE_NO_WARNINGS=1)
+endif()
+
+set(install_targets ${install_targets} Terra PARENT_SCOPE)
+
+# Make the executable a default target to build & run in Visual Studio
+set_property(DIRECTORY ${PROJECT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Terra)

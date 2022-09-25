@@ -38,9 +38,12 @@ set(install_targets "")
 
 add_subdirectory(src)
 
+include(cmake/CPM.cmake)
+add_subdirectory(terra)
+
 if(FASTNOISE2_NOISETOOL)
-    include(cmake/CPM.cmake)
-    add_subdirectory(NoiseTool)
+#    include(cmake/CPM.cmake)
+#    add_subdirectory(NoiseTool)
 endif()
 
 if(FASTNOISE2_TESTS)
