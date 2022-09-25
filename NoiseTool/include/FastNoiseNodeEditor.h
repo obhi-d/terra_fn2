@@ -196,6 +196,7 @@ namespace Magnum
         Node                 mOverheadNode;
         int32_t              mNodeBenchmarkIndex = 0;
         int32_t              mNodeBenchmarkMax   = 128;
+        int32_t              mSelectedNodeId     = -1;
 
         FastSIMD::eLevel mMaxSIMDLevel    = FastSIMD::Level_Null;
         FastSIMD::eLevel mActualSIMDLevel = FastSIMD::Level_Null;

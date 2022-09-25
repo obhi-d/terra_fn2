@@ -183,6 +183,10 @@ public:
         struct LocalBlock
         {
             float32v output[VectorsPerBlock];
+            void     setZero()
+            {
+                std::memset( output, 0, sizeof( output ) );
+            }
         };
 
 

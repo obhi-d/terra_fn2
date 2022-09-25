@@ -552,6 +552,8 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
                 if( !nodeEditor->FindNodeFromId( i ) &&
                     nodeEditor->mNodes.try_emplace( nodeData, *nodeEditor, nodeData, true, i ).second )
                 {
+                    if( nodeEditor->mSelectedNodeId == i )
+                        nodeEditor->mSelectedNode = nodeData;
                     return;
                 }
             }
@@ -559,7 +561,11 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
             delete nodeData;
         }
     };
-
+    nodeSettings.ApplyAllFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler ) {
+        auto* nodeEditor = (FastNoiseNodeEditor*)handler->UserData;
+        if( nodeEditor->mSelectedNode )
+            nodeEditor->ChangeSelectedNode( nodeEditor->mSelectedNode );
+    };
 
     ImGuiSettingsHandler textureSettings;
     textureSettings.TypeName   = "NoiseToolTextureMap";
@@ -616,11 +622,7 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
         outBuf->appendf( "image_path=%s\n", nodeEditor->mLastImportImagePath.c_str() );
         outBuf->appendf( "texure_preview=%c\n", (char)nodeEditor->mEnableTexPreview );
         outBuf->appendf( "selected_image=%d\n", nodeEditor->mSelectedImage.index );
-        auto selection = nodeEditor->mNodes.find( nodeEditor->mSelectedNode );
-        if( selection != nodeEditor->mNodes.end() )
-        {
-            outBuf->appendf( "selected_node=%d\n", selection->second.nodeId );
-        }
+        outBuf->appendf( "selected_node=%d\n", nodeEditor->mSelectedNodeId );
     };
     editorSettings.ReadOpenFn = []( ImGuiContext* ctx, ImGuiSettingsHandler* handler, const char* name ) -> void* {
         if( strcmp( name, "Settings" ) == 0 )
@@ -641,23 +643,11 @@ void FastNoiseNodeEditor::SetupSettingsHandlers()
 
         sscanf( line, "texure_preview=%c", (char*)&nodeEditor->mEnableTexPreview );
         sscanf( line, "selected_image=%d\n", &nodeEditor->mSelectedImage.index );
+        sscanf( line, "selected_node=%d\n", &nodeEditor->mSelectedNodeId );
         std::string_view l( line );
         if( l.starts_with( "image_path=" ) )
         {
             nodeEditor->mLastImportImagePath = l.substr( sizeof( "image_path" ) );
-        }
-
-        int selection = -1;
-        if( sscanf( line, "selected_node=%d\n", &selection ) == 1 )
-        {
-            for( auto& n: nodeEditor->mNodes )
-            {
-                if( n.second.nodeId == selection )
-                {
-                    nodeEditor->ChangeSelectedNode( n.first );
-                    break;
-                }
-            }
         }
     };
 
@@ -1572,11 +1562,13 @@ FastNoise::SmartNode<> FastNoiseNodeEditor::GenerateSelectedPreview()
 {
     auto find = mNodes.find( mSelectedNode );
 
+
     FastNoise::SmartNode<> generator;
 
     if( find != mNodes.end() )
     {
-        generator = FastNoise::NewFromEncodedNodeTree( find->second.serialised.c_str(), mMaxSIMDLevel );
+        mSelectedNodeId = find->second.nodeId;
+        generator       = FastNoise::NewFromEncodedNodeTree( find->second.serialised.c_str(), mMaxSIMDLevel );
 
         if( generator )
         {
@@ -1633,8 +1625,7 @@ int FastNoiseNodeEditor::GetFreeNodeId()
 
 void FastNoiseNodeEditor::ChangeSelectedNode( FastNoise::NodeData* newId )
 {
-    mSelectedNode = newId;
-
+    mSelectedNode                    = newId;
     FastNoise::SmartNode<> generator = GenerateSelectedPreview();
 
     if( generator )
